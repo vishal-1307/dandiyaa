@@ -1,0 +1,23 @@
+{
+  "name": "Jaynagar Milan Utsav 2026",
+  "short_name": "Milan Utsav",
+  "description": "Celebrate Dandiya & Jhijhiya Night on 19 October 2026 at Marwadi Vivah Bhavan, Jaynagar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f0d",
+  "theme_color": "#0a0f0d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "assets/jmu-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/jmu-logo-small.webp",
+      "sizes": "192x192",
+      "type": "image/webp"
+    }
+  ]
+}

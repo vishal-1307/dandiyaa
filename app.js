@@ -50,7 +50,18 @@
     }
   }
 
-  // --- Toast Notification Helper ---
+  // --- Security: HTML Entity Sanitizer to Prevent DOM XSS ---
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // --- Toast Notification Helper (Safe textContent DOM injection) ---
   function showToast(message, type = 'info') {
     let container = document.getElementById('toast-container');
     if (!container) {
@@ -62,7 +73,9 @@
 
     const toast = document.createElement('div');
     toast.className = `toast-pill ${type}`;
-    toast.innerHTML = `<span>${message}</span>`;
+    const span = document.createElement('span');
+    span.textContent = message;
+    toast.appendChild(span);
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -276,14 +289,16 @@
     const address = addressInput ? addressInput.value.trim() : '';
     const insta = instaInput ? instaInput.value.trim() : '';
 
+    const indianPhoneRegex = /^[6-9]\d{9}$/;
+
     if (!name || name.length < 2) {
       showToast('Please enter your full name', 'error');
       if (nameInput) nameInput.focus();
       return;
     }
 
-    if (!phone || phone.length !== 10) {
-      showToast('Please enter a valid 10-digit WhatsApp/Mobile number', 'error');
+    if (!phone || !indianPhoneRegex.test(phone)) {
+      showToast('Please enter a valid 10-digit Indian WhatsApp/Mobile number', 'error');
       if (phoneInput) phoneInput.focus();
       return;
     }
@@ -304,16 +319,21 @@
         if (partnerNameInput) partnerNameInput.focus();
         return;
       }
+      if (partnerPhone && !indianPhoneRegex.test(partnerPhone)) {
+        showToast('Please enter a valid 10-digit mobile number for spouse', 'error');
+        if (partnerPhoneInput) partnerPhoneInput.focus();
+        return;
+      }
     }
 
-    // Save state
+    // Defensive capping of string lengths
     wizardState.data = {
-      name,
-      phone,
-      address,
-      insta,
-      partnerName,
-      partnerPhone
+      name: name.slice(0, 60),
+      phone: phone,
+      address: address.slice(0, 120),
+      insta: insta ? insta.slice(0, 40) : '',
+      partnerName: partnerName ? partnerName.slice(0, 60) : '',
+      partnerPhone: partnerPhone
     };
 
     renderStep2Payment();
@@ -610,7 +630,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
         resultContainer.innerHTML = `
           <div class="not-found-card">
             <h4>Ticket ID Nahi Mila</h4>
-            <p>"${query}" ke liye koi registered pass nahi mila. Kripya apna valid Ticket ID check karein ya naya registration karein.</p>
+            <p>"${escapeHtml(query)}" ke liye koi registered pass nahi mila. Kripya apna valid Ticket ID check karein ya naya registration karein.</p>
             <div style="margin-top:16px;">
               <button class="button small" onclick="closeMyPassModal(); openRegistrationModal();">Book New Pass</button>
             </div>
@@ -628,28 +648,28 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
     let partnerHtml = '';
     if (pass.partnerName) {
-      partnerHtml = `<div class="lookup-field"><span>Partner:</span> <strong>${pass.partnerName}</strong></div>`;
+      partnerHtml = `<div class="lookup-field"><span>Partner:</span> <strong>${escapeHtml(pass.partnerName)}</strong></div>`;
     }
 
     resultContainer.innerHTML = `
       <div class="lookup-pass-card">
         <div class="lookup-pass-header">
-          <div class="pass-badge">PASS ID: ${pass.passId}</div>
+          <div class="pass-badge">PASS ID: ${escapeHtml(pass.passId)}</div>
           <span class="status-pill ${pass.checkedIn ? 'checked-in' : 'confirmed'}">${pass.checkedIn ? '✓ Verified at Gate' : 'Confirmed Booking'}</span>
         </div>
         <div class="lookup-body">
-          <div class="lookup-field"><span>Attendee:</span> <strong>${pass.name}</strong></div>
-          <div class="lookup-field"><span>Category:</span> <strong>${pass.category} (₹${pass.amount})</strong></div>
-          <div class="lookup-field"><span>Mobile:</span> <strong>${pass.phone}</strong></div>
-          <div class="lookup-field"><span>Address:</span> <strong>${pass.address}</strong></div>
-          ${pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A' ? `<div class="lookup-field"><span>Instagram:</span> <strong>${pass.insta}</strong></div>` : ''}
+          <div class="lookup-field"><span>Attendee:</span> <strong>${escapeHtml(pass.name)}</strong></div>
+          <div class="lookup-field"><span>Category:</span> <strong>${escapeHtml(pass.category)} (₹${escapeHtml(pass.amount)})</strong></div>
+          <div class="lookup-field"><span>Mobile:</span> <strong>${escapeHtml(pass.phone)}</strong></div>
+          <div class="lookup-field"><span>Address:</span> <strong>${escapeHtml(pass.address)}</strong></div>
+          ${pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A' ? `<div class="lookup-field"><span>Instagram:</span> <strong>${escapeHtml(pass.insta)}</strong></div>` : ''}
           ${partnerHtml}
           <div class="lookup-field"><span>Event Date:</span> <strong>19 Oct 2026 • 6–10 PM</strong></div>
           <div class="lookup-field"><span>Venue:</span> <strong>Marwadi Vivah Bhavan, Jaynagar</strong></div>
         </div>
         <div class="lookup-actions">
-          <button class="button small" onclick="viewFullPassFromLookup('${pass.passId}')">Show Full Digital Pass</button>
-          <a class="button dark small" href="https://wa.me/${config.whatsappNumber}?text=${encodeURIComponent('Hello, I am inquiring about my pass ID: ' + pass.passId + ' for Jaynagar Milan Utsav 2026.')}" target="_blank" rel="noopener">WhatsApp Support</a>
+          <button class="button small" onclick="viewFullPassFromLookup('${escapeHtml(pass.passId)}')">Show Full Digital Pass</button>
+          <a class="button dark small" href="https://wa.me/${encodeURIComponent(config.whatsappNumber)}?text=${encodeURIComponent('Hello, I am inquiring about my pass ID: ' + pass.passId + ' for Jaynagar Milan Utsav 2026.')}" target="_blank" rel="noopener noreferrer">WhatsApp Support</a>
         </div>
       </div>
     `;
@@ -668,14 +688,21 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
   };
 
   // --- Organizer Operations & Gate Check-in Portal ---
+  let adminLockUntil = 0;
+  let adminFailedAttempts = 0;
+
   window.openAdminModal = function () {
     const modal = document.getElementById('admin-modal');
     if (!modal) return;
 
-    // Check if already authenticated this session
-    if (sessionStorage.getItem('jmu_admin_auth') === 'true') {
+    // Check session validity (30-minute auto timeout)
+    const authTime = Number(sessionStorage.getItem('jmu_admin_auth_time') || 0);
+    const isAuth = sessionStorage.getItem('jmu_admin_auth') === 'true';
+    if (isAuth && (Date.now() - authTime < 30 * 60 * 1000)) {
       showAdminDashboard();
     } else {
+      sessionStorage.removeItem('jmu_admin_auth');
+      sessionStorage.removeItem('jmu_admin_auth_time');
       showAdminLogin();
     }
 
@@ -688,6 +715,10 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     if (modal) {
       modal.classList.remove('active');
       document.body.classList.remove('modal-open');
+      const pinInput = document.getElementById('admin-pin-input');
+      if (pinInput && sessionStorage.getItem('jmu_admin_auth') !== 'true') {
+        pinInput.value = '';
+      }
     }
   };
 
@@ -713,13 +744,31 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     const entered = pinInput ? pinInput.value.trim() : '';
     const config = getConfig();
 
-    if (entered === config.adminPin || entered === 'manish13' || entered === 'admin123') {
+    // Brute-force rate limiting protection
+    if (Date.now() < adminLockUntil) {
+      const waitSeconds = Math.ceil((adminLockUntil - Date.now()) / 1000);
+      showToast(`Security Lockout: Too many failed attempts. Try again in ${waitSeconds}s`, 'error');
+      return;
+    }
+
+    if (entered === config.adminPin) {
+      adminFailedAttempts = 0;
       sessionStorage.setItem('jmu_admin_auth', 'true');
+      sessionStorage.setItem('jmu_admin_auth_time', String(Date.now()));
       showAdminDashboard();
       showToast('✓ Welcome Organizer', 'success');
     } else {
-      showToast('Incorrect Organizer PIN', 'error');
-      if (pinInput) pinInput.focus();
+      adminFailedAttempts++;
+      if (adminFailedAttempts >= 5) {
+        adminLockUntil = Date.now() + 5 * 60 * 1000; // 5-minute lockout
+        showToast('Security alert: Account locked for 5 minutes due to 5 failed attempts', 'error');
+      } else {
+        showToast(`Incorrect PIN. ${5 - adminFailedAttempts} attempt(s) remaining.`, 'error');
+      }
+      if (pinInput) {
+        pinInput.value = '';
+        pinInput.focus();
+      }
     }
   };
 
@@ -777,18 +826,18 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
     tbody.innerHTML = list.map((item, idx) => `
       <tr>
-        <td><strong>${item.passId}</strong></td>
-        <td>${item.name}</td>
-        <td><span class="badge ${item.category.includes('Couple') ? 'badge-gold' : 'badge-wine'}">${item.category}</span></td>
-        <td><a href="tel:${item.phone}">${item.phone}</a></td>
-        <td>${item.address || '-'}</td>
+        <td><strong>${escapeHtml(item.passId)}</strong></td>
+        <td>${escapeHtml(item.name)}</td>
+        <td><span class="badge ${item.category && item.category.includes('Couple') ? 'badge-gold' : 'badge-wine'}">${escapeHtml(item.category)}</span></td>
+        <td><a href="tel:${escapeHtml(item.phone)}">${escapeHtml(item.phone)}</a></td>
+        <td>${escapeHtml(item.address || '-')}</td>
         <td>
           <span class="status-pill ${item.checkedIn ? 'checked-in' : 'pending'}">
             ${item.checkedIn ? '✓ Admitted' : 'Pending'}
           </span>
         </td>
         <td>
-          <button class="button small" style="padding:4px 10px; font-size:12px; min-height:30px;" onclick="toggleCheckIn('${item.passId}')">
+          <button class="button small" style="padding:4px 10px; font-size:12px; min-height:30px;" onclick="toggleCheckIn('${escapeHtml(item.passId)}')">
             ${item.checkedIn ? 'Undo Entry' : 'Check In'}
           </button>
         </td>
@@ -804,9 +853,9 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       return;
     }
     const filtered = all.filter(r => 
-      r.passId.toLowerCase().includes(query) ||
-      r.name.toLowerCase().includes(query) ||
-      r.phone.includes(query) ||
+      (r.passId && r.passId.toLowerCase().includes(query)) ||
+      (r.name && r.name.toLowerCase().includes(query)) ||
+      (r.phone && r.phone.includes(query)) ||
       (r.address && r.address.toLowerCase().includes(query)) ||
       (r.partnerName && r.partnerName.toLowerCase().includes(query))
     );
@@ -823,12 +872,12 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     if (!query) return;
 
     const all = getRegistrations();
-    const match = all.find(r => r.passId.toUpperCase() === query || r.phone === query);
+    const match = all.find(r => (r.passId && r.passId.toUpperCase() === query) || r.phone === query);
 
     if (!match) {
       if (feedbackEl) {
         feedbackEl.className = 'gate-feedback error';
-        feedbackEl.innerHTML = `❌ <strong>PASS NOT FOUND</strong><br>Code "${query}" is not in the system roster.`;
+        feedbackEl.innerHTML = `❌ <strong>PASS NOT FOUND</strong><br>Code "${escapeHtml(query)}" is not in the system roster.`;
       }
       return;
     }
@@ -836,7 +885,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     if (match.checkedIn) {
       if (feedbackEl) {
         feedbackEl.className = 'gate-feedback warning';
-        feedbackEl.innerHTML = `⚠️ <strong>ALREADY CHECKED IN!</strong><br>${match.name} (${match.category}) was already admitted at gate.`;
+        feedbackEl.innerHTML = `⚠️ <strong>ALREADY CHECKED IN!</strong><br>${escapeHtml(match.name)} (${escapeHtml(match.category)}) was already admitted at gate.`;
       }
     } else {
       match.checkedIn = true;
@@ -846,7 +895,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
       if (feedbackEl) {
         feedbackEl.className = 'gate-feedback success';
-        feedbackEl.innerHTML = `✅ <strong>ENTRY APPROVED!</strong><br>Welcome <strong>${match.name}</strong> • ${match.category} • Admitted.`;
+        feedbackEl.innerHTML = `✅ <strong>ENTRY APPROVED!</strong><br>Welcome <strong>${escapeHtml(match.name)}</strong> • ${escapeHtml(match.category)} • Admitted.`;
       }
       showToast('✓ Entry verified: ' + match.passId, 'success');
       if (input) input.value = '';
@@ -871,22 +920,30 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       return;
     }
 
+    function safeCsvCell(val) {
+      let str = String(val === undefined || val === null ? '' : val);
+      if (/^[=\+\-@\t\r]/.test(str)) {
+        str = "'" + str; // neutralize CSV formula execution
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+
     const headers = ["Pass ID", "Category", "Amount", "Attendee Name", "Mobile", "Address", "Instagram", "Partner Name", "Partner Mobile", "Booking Date", "Gate Check-In"];
     const rows = all.map(item => [
-      `"${item.passId}"`,
-      `"${item.category}"`,
-      `"${item.amount}"`,
-      `"${(item.name || '').replace(/"/g, '""')}"`,
-      `"${item.phone || ''}"`,
-      `"${(item.address || '').replace(/"/g, '""')}"`,
-      `"${(item.insta || '').replace(/"/g, '""')}"`,
-      `"${(item.partnerName || '').replace(/"/g, '""')}"`,
-      `"${(item.partnerPhone || '').replace(/"/g, '""')}"`,
-      `"${new Date(item.timestamp).toLocaleString('en-IN')}"`,
-      `"${item.checkedIn ? 'YES' : 'NO'}"`
+      safeCsvCell(item.passId),
+      safeCsvCell(item.category),
+      safeCsvCell(item.amount),
+      safeCsvCell(item.name),
+      safeCsvCell(item.phone),
+      safeCsvCell(item.address),
+      safeCsvCell(item.insta),
+      safeCsvCell(item.partnerName),
+      safeCsvCell(item.partnerPhone),
+      safeCsvCell(new Date(item.timestamp).toLocaleString('en-IN')),
+      safeCsvCell(item.checkedIn ? 'YES' : 'NO')
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.map(safeCsvCell).join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
