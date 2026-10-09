@@ -40,8 +40,6 @@ jaynagar-milan-utsav/
 │   ├── verify-assets.js                 # Automated asset reference validation
 │   ├── test-registration-flow.js        # Automated test suite for registration & payment engine
 │   └── optimise-images.py               # PIL image optimization & webp pipeline
-├── .openai/
-│   └── hosting.json                     # Hosting configuration for ChatGPT site deployment
 └── README.md                            # Complete documentation & operations manual
 ```
 
@@ -52,7 +50,7 @@ jaynagar-milan-utsav/
 ### 1. Zero-Backend Client Architecture
 - No servers, databases, or third-party paid gateways required.
 - Everything runs 100% in modern browsers with `localStorage` persistence.
-- Zero server maintenance costs; can be deployed on ChatGPT hosting, GitHub Pages, Netlify, or Vercel with zero latency.
+- Zero server maintenance costs; can be deployed on Vercel, Netlify, or GitHub Pages with zero latency.
 
 ### 2. 3-Step Guided Registration & Payment Engine
 - **Step 1: Attendee Details Form:**

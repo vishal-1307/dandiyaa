@@ -20,16 +20,19 @@ console.log('--- STARTING FLOW VERIFICATION TESTS ---');
 // 1. Pass ID Generation Test
 function generatePassId() {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  const timeSlice = (Date.now() % (chars.length * chars.length));
+  const c1 = chars.charAt(Math.floor(timeSlice / chars.length));
+  const c2 = chars.charAt(timeSlice % chars.length);
+  let randomPart = '';
+  for (let i = 0; i < 3; i++) {
+    randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `JMU-${code}`;
+  return `JMU-${c1}${c2}${randomPart}`;
 }
 
 const passId1 = generatePassId();
 assert(passId1.startsWith('JMU-'), 'Pass ID must start with JMU-');
-assert(passId1.length === 8, 'Pass ID must be 8 characters long');
+assert(passId1.length === 9, 'Pass ID must be 9 characters long (JMU-XXXXX)');
 console.log('✓ Pass ID Generator test passed:', passId1);
 
 // 2. UPI Intent URL test

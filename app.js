@@ -168,11 +168,14 @@
 
   function generatePassId() {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-    let code = '';
-    for (let i = 0; i < 4; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    const timeSlice = (Date.now() % (chars.length * chars.length));
+    const c1 = chars.charAt(Math.floor(timeSlice / chars.length));
+    const c2 = chars.charAt(timeSlice % chars.length);
+    let randomPart = '';
+    for (let i = 0; i < 3; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    return `JMU-${code}`;
+    return `JMU-${c1}${c2}${randomPart}`;
   }
 
   // Open Registration Modal
@@ -385,7 +388,7 @@
       name: wizardState.data.name,
       phone: wizardState.data.phone,
       address: wizardState.data.address,
-      insta: wizardState.data.insta ? (wizardState.data.insta.startsWith('@') ? wizardState.data.insta : '@' + wizardState.data.insta) : 'N/A',
+      insta: wizardState.data.insta && wizardState.data.insta.trim() ? (wizardState.data.insta.trim().startsWith('@') ? wizardState.data.insta.trim() : '@' + wizardState.data.insta.trim()) : '',
       partnerName: wizardState.data.partnerName,
       partnerPhone: wizardState.data.partnerPhone,
       timestamp: Date.now(),
@@ -413,23 +416,31 @@
     const config = getConfig();
 
     // Fill pass fields
-    const idEl = document.getElementById('pass-id-display');
     const nameEl = document.getElementById('pass-name-display');
     const catEl = document.getElementById('pass-cat-display');
     const phoneEl = document.getElementById('pass-phone-display');
     const addrEl = document.getElementById('pass-addr-display');
     const instaEl = document.getElementById('pass-insta-display');
+    const instaWrap = document.getElementById('pass-insta-wrap');
     const partnerWrap = document.getElementById('pass-partner-wrap');
     const partnerNameEl = document.getElementById('pass-partner-display');
     const amountEl = document.getElementById('pass-amount-display');
 
-    if (idEl) idEl.textContent = pass.passId;
     if (nameEl) nameEl.textContent = pass.name;
     if (catEl) catEl.textContent = pass.category;
     if (phoneEl) phoneEl.textContent = pass.phone;
     if (addrEl) addrEl.textContent = pass.address;
-    if (instaEl) instaEl.textContent = pass.insta || 'N/A';
     if (amountEl) amountEl.textContent = `₹${pass.amount}/-`;
+
+    // Only display Instagram if user entered a value (omit if blank, never show N/A)
+    if (instaWrap) {
+      if (pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A') {
+        instaWrap.style.display = 'block';
+        if (instaEl) instaEl.textContent = pass.insta;
+      } else {
+        instaWrap.style.display = 'none';
+      }
+    }
 
     if (partnerWrap) {
       if (pass.partnerName) {
@@ -449,6 +460,11 @@
       partnerInfo = `👫 Partner / Spouse: ${pass.partnerName}\n`;
     }
 
+    let instaInfo = '';
+    if (pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A') {
+      instaInfo = `📸 Instagram: ${pass.insta}\n`;
+    }
+
     const waMessage = 
 `🌸 JAYNAGAR MILAN UTSAV 2026 🌸
 ━━━━━━━━━━━━━━━━━━━━
@@ -457,8 +473,7 @@
 🏷️ Category: ${pass.category} (₹${pass.amount})
 📞 Mobile: ${pass.phone}
 📍 Address: ${pass.address}
-📸 Instagram: ${pass.insta}
-${partnerInfo}💰 Registration Fee: ₹${pass.amount}/-
+${instaInfo}${partnerInfo}💰 Registration Fee: ₹${pass.amount}/-
 📅 Date: 19 October 2026 • 6:00 PM – 10:00 PM
 📍 Venue: Marwadi Vivah Bhavan, Jaynagar
 ━━━━━━━━━━━━━━━━━━━━
@@ -627,7 +642,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
           <div class="lookup-field"><span>Category:</span> <strong>${pass.category} (₹${pass.amount})</strong></div>
           <div class="lookup-field"><span>Mobile:</span> <strong>${pass.phone}</strong></div>
           <div class="lookup-field"><span>Address:</span> <strong>${pass.address}</strong></div>
-          ${pass.insta && pass.insta !== 'N/A' ? `<div class="lookup-field"><span>Instagram:</span> <strong>${pass.insta}</strong></div>` : ''}
+          ${pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A' ? `<div class="lookup-field"><span>Instagram:</span> <strong>${pass.insta}</strong></div>` : ''}
           ${partnerHtml}
           <div class="lookup-field"><span>Event Date:</span> <strong>19 Oct 2026 • 6–10 PM</strong></div>
           <div class="lookup-field"><span>Venue:</span> <strong>Marwadi Vivah Bhavan, Jaynagar</strong></div>

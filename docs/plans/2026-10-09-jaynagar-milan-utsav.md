@@ -4,7 +4,7 @@
 
 **Goal:** Create a client-side (no-backend) event website for Jaynagar Milan Utsav 2026 organized by Motion Arts Academy, featuring complete multi-step registration, custom UPI payment QR flow, instant Ticket Pass ID generation, WhatsApp payment screenshot verification flow, self-service Pass lookup, and organizer gate check-in terminal.
 
-**Architecture:** A static, mobile-first web architecture living in `jaynagar-milan-utsav/dist/` deployable directly to static hosting (ChatGPT site / GitHub Pages / Netlify / Vercel). All data persists locally via `localStorage`, QR codes generate in pure client-side JavaScript, and ticket verifications seamlessly route to WhatsApp (+91 70505 51310).
+**Architecture:** A static, mobile-first web architecture living in `jaynagar-milan-utsav/dist/` deployable directly to static hosting (Vercel / Netlify / GitHub Pages). All data persists locally via `localStorage`, QR codes generate in pure client-side JavaScript, and ticket verifications seamlessly route to WhatsApp (+91 70505 51310).
 
 **Tech Stack:** Semantic HTML5, Modern CSS3 with festive royal gold & Mithila wine design tokens, Pure Vanilla JavaScript (ES6+), Client-side vector QR Code generation, Canvas / Printable Pass generation.
 
