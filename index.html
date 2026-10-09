@@ -6,8 +6,8 @@
   <title>Jaynagar Milan Utsav 2026 · Dandiya & Jhijhiya Special Night</title>
   <meta name="description" content="Celebrate Dandiya & Jhijhiya with Jaynagar Milan Utsav 2026, organised by Motion Arts Academy. 19 October, 6:00–10:00 PM at Marwadi Vivah Bhavan, Jaynagar. Solo ₹249, Married Couple ₹399.">
   <meta name="theme-color" content="#0a0f0d">
-  <link rel="icon" href="assets/motion-arts-badge.webp">
-  <link rel="apple-touch-icon" href="assets/motion-arts-badge.webp">
+  <link rel="icon" href="assets/jmu-logo-small.webp">
+  <link rel="apple-touch-icon" href="assets/jmu-logo-small.webp">
   <link rel="stylesheet" href="styles-v2.css">
   <script src="qrcode.bundle.js" defer></script>
   <script src="html2canvas.bundle.js" defer></script>
@@ -19,14 +19,14 @@
   <!-- Sticky Header -->
   <header class="header">
     <div class="wrap header-inner">
+      <!-- Clean prominent Festival Brand Title -->
       <a class="brand" href="#home" aria-label="Jaynagar Milan Utsav home">
         <div class="brand-logos">
-          <img src="assets/motion-arts-badge.webp" width="44" height="44" alt="Motion Arts Academy">
-          <img src="assets/jmu-logo-small.webp" width="44" height="44" alt="JMU Logo">
+          <img src="assets/jmu-logo-small.webp" width="46" height="46" alt="Jaynagar Milan Utsav">
         </div>
         <div class="brand-text">
-          <span>Presented by Motion Arts Academy</span>
-          JAYNAGAR MILAN UTSAV
+          <strong>JAYNAGAR MILAN UTSAV</strong>
+          <span>2026 • DANDIYA &amp; JHIJHIYA</span>
         </div>
       </a>
 
@@ -41,7 +41,14 @@
       </nav>
 
       <div class="header-actions">
-        <button class="button dark small" onclick="openMyPassModal()" aria-label="Retrieve Pass">🎫 My Pass</button>
+        <!-- Luxury SVG My Pass Button -->
+        <button class="button small btn-mypass" onclick="openMyPassModal()" aria-label="Retrieve Pass">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+            <path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/>
+          </svg>
+          <span>My Pass</span>
+        </button>
         <button class="button small" onclick="openRegistrationModal('solo')">Book Tickets</button>
       </div>
     </div>
@@ -58,10 +65,11 @@
 
       <div class="wrap hero-inner">
         <div class="hero-copy">
-          <p class="hero-kicker">
-            <span class="academy-tag">MOTION ARTS ACADEMY PRESENTS</span>
-            <span>JAYNAGAR • 2026</span>
-          </p>
+          <!-- Presenter Kicker placed suitably here -->
+          <div class="hero-kicker">
+            <span class="academy-tag">Presented by Motion Arts Academy</span>
+            <span class="year-tag">Jaynagar • 2026</span>
+          </div>
 
           <h1>DANDIYA<br><span>&amp; JHIJHIYA</span><br>SPECIAL NIGHT.</h1>
           <p class="hero-hindi" lang="hi">इस बार, मिलकर झूमें।</p>
@@ -82,14 +90,29 @@
           </div>
 
           <div class="hero-meta">
-            <div>📅 <strong>Monday, 19 October 2026</strong></div>
-            <div>⏰ <strong>6:00 PM – 10:00 PM</strong></div>
-            <div>📍 <strong>Marwadi Vivah Bhavan, Jaynagar</strong></div>
+            <div class="hero-meta-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <strong>Monday, 19 October 2026</strong>
+            </div>
+            <div class="hero-meta-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <strong>6:00 PM – 10:00 PM</strong>
+            </div>
+            <div class="hero-meta-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <strong>Marwadi Vivah Bhavan, Jaynagar</strong>
+            </div>
           </div>
 
           <div class="hero-actions">
             <button class="button" onclick="openRegistrationModal('solo')">Book Tickets · from ₹249</button>
-            <button class="button dark" onclick="openMyPassModal()">🎫 Retrieve My Pass</button>
+            <button class="button dark" onclick="openMyPassModal()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold);" aria-hidden="true">
+                <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                <path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/>
+              </svg>
+              <span>Retrieve Pass</span>
+            </button>
             <a class="text-link" href="https://chat.whatsapp.com/FJt21SRONmx3cnrgsd2QK0?s=sh&p=a&mlu=4&ilr=4&iam=" target="_blank" rel="noopener">Join WhatsApp Community ➔</a>
           </div>
         </div>
@@ -118,7 +141,7 @@
       </div>
       <a href="#tickets">
         <span class="meta-label">TICKETS START AT</span>
-        <strong>₹249 <span>/ person (Solo) & ₹399 (Couple)</span></strong>
+        <strong>₹249 <span>/ person (Solo) &amp; ₹399 (Couple)</span></strong>
       </a>
     </div>
 
@@ -225,7 +248,7 @@
       </div>
     </section>
 
-    <!-- Event Highlights & Awards -->
+    <!-- Event Highlights & Awards (Luxury Golden Vector Icons) -->
     <section class="section wrap" id="highlights">
       <div class="section-heading">
         <div>
@@ -236,38 +259,79 @@
       </div>
 
       <div class="highlights-grid">
+        <!-- 1. Best Dandiya Pair (Trophy Cup SVG) -->
         <div class="highlight-card">
-          <span class="highlight-icon">🏆</span>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2"/>
+              <path d="M18 9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/>
+              <path d="M4 3h16v6a6 6 0 0 1-12 0V3z"/>
+              <path d="M12 15v4"/>
+              <path d="M8 21h8"/>
+            </svg>
+          </div>
           <h3>Best Dandiya Pair</h3>
           <p>Trophy and gift hamper awarded to the couple with the most graceful choreography and synchronization.</p>
         </div>
 
+        <!-- 2. Best Traditional Attire (Crown / Festive Garment SVG) -->
         <div class="highlight-card">
-          <span class="highlight-icon">👗</span>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/>
+              <line x1="4" y1="20" x2="20" y2="20"/>
+            </svg>
+          </div>
           <h3>Best Traditional Attire</h3>
           <p>Honoring the most authentic and resplendent ethnic Indian attire (Male &amp; Female categories).</p>
         </div>
 
+        <!-- 3. Star Dancer of the Night (8-Point Sparkle Star SVG) -->
         <div class="highlight-card">
-          <span class="highlight-icon">🌟</span>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
           <h3>Star Dancer of the Night</h3>
           <p>Recognizing outstanding passion, stamina, and energy throughout the Garba dance circles.</p>
         </div>
 
+        <!-- 4. 360° Festive Photo Booths (Camera with Flash SVG) -->
         <div class="highlight-card">
-          <span class="highlight-icon">📸</span>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
           <h3>360° Festive Photo Booths</h3>
           <p>Capture Instagram-worthy memories with decorative traditional backdrops and props.</p>
         </div>
 
+        <!-- 5. Folk & Bollywood Beats (Headphones & Sound Waves SVG) -->
         <div class="highlight-card">
-          <span class="highlight-icon">🎶</span>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+              <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+            </svg>
+          </div>
           <h3>Folk &amp; Bollywood Beats</h3>
           <p>Curated soundscapes blending traditional Dhol beats with contemporary festive tracks.</p>
         </div>
 
+        <!-- 6. Mithila Food Court (Gourmet Cloche & Festive Dining SVG) -->
         <div class="highlight-card">
-          <span class="highlight-icon">🍲</span>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+              <line x1="6" y1="1" x2="6" y2="4"/>
+              <line x1="10" y1="1" x2="10" y2="4"/>
+              <line x1="14" y1="1" x2="14" y2="4"/>
+            </svg>
+          </div>
           <h3>Mithila Food Court</h3>
           <p>Explore a variety of mouth-watering snacks, sweets, chaat, and refreshing festive drinks.</p>
         </div>
@@ -296,10 +360,22 @@
           <div class="price">₹249 <span>/ person</span></div>
 
           <ul class="ticket-features">
-            <li><span>✓</span> Full ground and DJ dance floor access</li>
-            <li><span>✓</span> Complimentary pair of Dandiya sticks</li>
-            <li><span>✓</span> Eligible for Star Dancer &amp; Best Dressed Awards</li>
-            <li><span>✓</span> Instant Digital Pass ID &amp; WhatsApp confirmation</li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Full ground and DJ dance floor access</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Complimentary pair of Dandiya sticks</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Eligible for Star Dancer &amp; Best Dressed Awards</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Instant Digital Pass ID &amp; WhatsApp confirmation</span>
+            </li>
           </ul>
 
           <div class="ticket-bottom">
@@ -319,10 +395,22 @@
           <div class="price">₹399 <span>/ married couple</span></div>
 
           <ul class="ticket-features">
-            <li><span>✓</span> Entry for married couple (2 persons)</li>
-            <li><span>✓</span> Complimentary Dandiya sticks for both</li>
-            <li><span>✓</span> Eligible for Best Dandiya Pair Trophy &amp; Awards</li>
-            <li><span>✓</span> Instant Digital Pass ID &amp; WhatsApp confirmation</li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Entry for married couple (2 persons)</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Complimentary Dandiya sticks for both</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Eligible for Best Dandiya Pair Trophy &amp; Awards</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Instant Digital Pass ID &amp; WhatsApp confirmation</span>
+            </li>
           </ul>
 
           <div class="ticket-bottom">
@@ -337,11 +425,14 @@
       <!-- WhatsApp Community Hub Banner -->
       <div class="community-banner" id="community">
         <div class="community-content">
-          <h3>💬 Join Official JMU WhatsApp Community</h3>
+          <h3>Join Official JMU WhatsApp Community</h3>
           <p>Stay updated with live announcements, song requests, event photo drops, and connect with fellow festival attendees before the night begins!</p>
           <div style="margin-top:16px;">
             <a class="button whatsapp-btn" href="https://chat.whatsapp.com/FJt21SRONmx3cnrgsd2QK0?s=sh&p=a&mlu=4&ilr=4&iam=" target="_blank" rel="noopener">
-              Join WhatsApp Group ➔
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+              </svg>
+              <span>Join WhatsApp Group ➔</span>
             </a>
           </div>
         </div>
@@ -349,7 +440,7 @@
           <img src="assets/whatsapp-group-qr.webp" width="90" height="90" alt="JMU WhatsApp Group QR">
           <div>
             <strong style="color:var(--gold); display:block; font-size:14px;">Scan with WhatsApp</strong>
-            <span style="font-size:12px; color:var(--muted);">JMU WhatsApp Group</span>
+            <span style="font-size:12px; color:var(--muted);">JMU Community Group</span>
           </div>
         </div>
       </div>
@@ -367,7 +458,14 @@
 
       <div class="rules-grid">
         <div class="rule-card">
-          <h3>🎫 Gate Entry Protocol</h3>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <h3>Gate Entry Protocol</h3>
           <ul>
             <li>• Gates open promptly at 6:00 PM; entry closes at 9:00 PM.</li>
             <li>• Valid Digital Pass ID (printed or on phone) mandatory at gate.</li>
@@ -376,7 +474,12 @@
         </div>
 
         <div class="rule-card">
-          <h3>👗 Traditional Dress Code</h3>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+          </div>
+          <h3>Traditional Dress Code</h3>
           <ul>
             <li>• Traditional ethnic Indian attire strongly encouraged.</li>
             <li>• Chaniya Choli, Kurta Pajama, or festive regional wear.</li>
@@ -385,7 +488,12 @@
         </div>
 
         <div class="rule-card">
-          <h3>🛡️ Family Safety &amp; Security</h3>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <h3>Family Safety &amp; Security</h3>
           <ul>
             <li>• Strict zero-tolerance policy towards alcohol, tobacco, or substances.</li>
             <li>• Dedicated female security personnel and first-aid desk on-site.</li>
@@ -394,7 +502,13 @@
         </div>
 
         <div class="rule-card">
-          <h3>🥢 Dandiya Sticks &amp; Props</h3>
+          <div class="icon-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </div>
+          <h3>Dandiya Sticks &amp; Props</h3>
           <ul>
             <li>• Official sanitized wooden Dandiya sticks provided at venue.</li>
             <li>• Personal decorated sticks permitted after security check.</li>
@@ -489,7 +603,7 @@
 
         <details>
           <summary>What if I close my browser? How do I retrieve my Pass?</summary>
-          <p>Your Pass is automatically saved to your device's browser. You can click "🎫 My Pass" at the top of the website anytime and enter your 10-digit mobile number or Pass ID to view or download your ticket pass.</p>
+          <p>Your Pass is automatically saved to your device's browser. You can click "My Pass" at the top of the website anytime and enter your 10-digit mobile number or Pass ID to view or download your ticket pass.</p>
         </details>
 
         <details>
@@ -509,23 +623,30 @@
     </section>
   </main>
 
-  <!-- Footer -->
-  <footer class="wrap">
-    <div>
-      <strong>JAYNAGAR MILAN UTSAV · 2026</strong>
-      <p>Presented with pride by Motion Arts Academy • Helpline: <a href="tel:+917050551310" style="color:var(--gold);">+91 70505 51310</a></p>
-      <p class="footer-dev-badge" style="margin-top:6px;">
-        Developed by Vishal ↗ <a href="https://vishalthakur.tech" target="_blank" rel="noopener">vishalthakur.tech</a>
-      </p>
+  <!-- Footer with Centered Developer Attribution -->
+  <footer>
+    <div class="wrap footer-main">
+      <div class="footer-brand">
+        <strong>JAYNAGAR MILAN UTSAV · 2026</strong>
+        <p>Organised with pride by <strong>Motion Arts Academy</strong></p>
+        <p>Helpline &amp; WhatsApp: <a href="tel:+917050551310" style="color:var(--gold);">+91 70505 51310</a></p>
+      </div>
+
+      <div class="footer-nav">
+        <a href="#experience">The Evening</a>
+        <a href="#schedule">Schedule</a>
+        <a href="#highlights">Highlights</a>
+        <a href="#tickets">Tickets</a>
+        <a href="#rules">Guidelines</a>
+        <a href="#venue">Venue</a>
+        <a href="#faq">FAQs</a>
+        <button class="footer-pass-link" onclick="openMyPassModal()">My Pass</button>
+      </div>
     </div>
 
-    <div class="footer-links">
-      <a href="#tickets">Tickets</a>
-      <a href="#schedule">Schedule</a>
-      <a href="#venue">Venue</a>
-      <a href="#faq">FAQs</a>
-      <button class="text-link" onclick="openMyPassModal()" style="border:0; cursor:pointer;">My Pass</button>
-      <button class="text-link" onclick="openAdminModal()" style="border:0; cursor:pointer; opacity:0.6; font-size:12px;">Organizer Portal</button>
+    <!-- Centered Developer Attribution (Middle bottom part) -->
+    <div class="footer-bottom-credit">
+      <p>Developed with ❤️ by <a href="https://vishalthakur.tech" target="_blank" rel="noopener">Vishal</a></p>
     </div>
   </footer>
 
@@ -536,7 +657,13 @@
       <strong>Tickets from ₹249</strong>
     </div>
     <div class="mobile-dock-actions">
-      <button class="button dark small" onclick="openMyPassModal()">My Pass</button>
+      <button class="button dark small btn-mypass" onclick="openMyPassModal()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+          <path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/>
+        </svg>
+        <span>My Pass</span>
+      </button>
       <button class="button small" onclick="openRegistrationModal('solo')">Book Now</button>
     </div>
   </div>
@@ -567,11 +694,11 @@
 
           <div class="category-tabs">
             <button type="button" class="cat-tab-btn active" id="cat-btn-solo" onclick="selectWizardCategory('solo')">
-              <strong>🎟️ Solo Pass · ₹249</strong>
+              <strong>Solo Pass · ₹249</strong>
               <span>1 Person Festival Entry</span>
             </button>
             <button type="button" class="cat-tab-btn" id="cat-btn-couple" onclick="selectWizardCategory('couple')">
-              <strong>👫 Couple Pass · ₹399</strong>
+              <strong>Couple Pass · ₹399</strong>
               <span>Married Couple Entry</span>
             </button>
           </div>
@@ -601,7 +728,7 @@
 
             <!-- Couple-Only Fields -->
             <div id="couple-fields-group" style="display:none; background:rgba(230,188,112,0.08); padding:16px; border-radius:8px; border:1px dashed var(--gold); margin-bottom:16px;">
-              <strong style="color:var(--gold); font-size:13.5px; display:block; margin-bottom:10px;">👫 Spouse / Partner Details (Married Couple)</strong>
+              <strong style="color:var(--gold); font-size:13.5px; display:block; margin-bottom:10px;">Spouse / Partner Details (Married Couple)</strong>
               <div class="form-row">
                 <div class="form-group" style="margin-bottom:0;">
                   <label for="reg-partner-name">Spouse Full Name <span class="req">*</span></label>
@@ -655,7 +782,10 @@
                 <span style="font-size:11px; color:var(--muted); display:block;">Official UPI ID</span>
                 <code id="pay-upi-id-display">8252969861lol@ibl</code>
               </div>
-              <button type="button" class="button small outline" onclick="copyUpiId()">📋 Copy UPI ID</button>
+              <button type="button" class="button small outline" onclick="copyUpiId()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy UPI ID</span>
+              </button>
             </div>
 
             <!-- Mobile Direct UPI Pay Button -->
@@ -686,10 +816,10 @@
             <div class="digital-pass-card" id="digital-pass-card">
               <div class="pass-header">
                 <div class="pass-brand">
-                  <img src="assets/motion-arts-badge.webp" width="42" height="42" alt="Motion Arts Academy">
+                  <img src="assets/jmu-logo-small.webp" width="42" height="42" alt="Jaynagar Milan Utsav">
                   <div>
-                    <h4>MOTION ARTS ACADEMY</h4>
-                    <span>JAYNAGAR MILAN UTSAV 2026</span>
+                    <h4>JAYNAGAR MILAN UTSAV</h4>
+                    <span>MOTION ARTS ACADEMY • 2026</span>
                   </div>
                 </div>
                 <div class="pass-id-badge" id="pass-id-display">JMU-0000</div>
@@ -744,26 +874,31 @@
 
           <!-- WhatsApp Submission Box -->
           <div class="wa-instruction-card">
-            <strong style="display:block; margin-bottom:4px; font-size:14px;">📸 Important: Verification Step</strong>
+            <strong style="display:block; margin-bottom:4px; font-size:14px;">Important: Verification Step</strong>
             Neeche diye button par click karein. WhatsApp par pre-filled details ke sath apna <strong>Payment Screenshot</strong> attach karke send karein taaki gate par Pass confirm ho sake!
           </div>
 
           <div class="pass-actions-box">
             <a id="btn-send-whatsapp-screenshot" class="button whatsapp-btn pulse-anim" href="#" target="_blank" rel="noopener">
-              📲 Send Details &amp; Payment Screenshot on WhatsApp
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+              </svg>
+              <span>Send Details &amp; Payment Screenshot on WhatsApp</span>
             </a>
 
             <div style="display:flex; gap:10px;">
               <button type="button" class="button dark" style="flex:1;" onclick="downloadPassAsImage()">
-                📥 Download Pass Image
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Download Pass Image</span>
               </button>
               <button type="button" class="button outline" style="flex:1;" onclick="copyCurrentPassId()">
-                📋 Copy Pass ID
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy Pass ID</span>
               </button>
             </div>
 
             <a id="btn-join-wa-group" class="button outline small" style="text-align:center; display:block;" href="https://chat.whatsapp.com/FJt21SRONmx3cnrgsd2QK0?s=sh&p=a&mlu=4&ilr=4&iam=" target="_blank" rel="noopener">
-              💬 Join Official JMU WhatsApp Community Group ➔
+              Join Official JMU WhatsApp Community Group ➔
             </a>
           </div>
         </div>
@@ -799,12 +934,12 @@
   </div>
 
   <!-- ============================================== -->
-  <!-- MODAL 3: ORGANIZER ADMIN OPERATIONS PORTAL    -->
+  <!-- MODAL 3: GATE CHECK-IN & ADMIN (SECRET #admin) -->
   <!-- ============================================== -->
   <div class="modal-overlay" id="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
     <div class="modal-box wide">
       <div class="modal-header">
-        <h3 id="admin-modal-title">Organizer Management Terminal</h3>
+        <h3 id="admin-modal-title">Gate Verification &amp; Check-In</h3>
         <button class="modal-close-btn" onclick="closeAdminModal()" aria-label="Close modal">&times;</button>
       </div>
 
@@ -812,8 +947,8 @@
         <!-- Login View -->
         <div id="admin-login-view">
           <form onsubmit="handleAdminLogin(event)" style="max-width:320px; margin:40px auto; text-align:center;">
-            <p style="font-size:14px; color:var(--muted); margin-bottom:14px;">Enter Organizer PIN:</p>
-            <input type="password" id="admin-pin-input" class="form-control" placeholder="PIN (Default: motion13)" required style="text-align:center; font-size:18px; letter-spacing:0.1em; margin-bottom:14px;">
+            <p style="font-size:14px; color:var(--muted); margin-bottom:14px;">Enter PIN:</p>
+            <input type="password" id="admin-pin-input" class="form-control" placeholder="PIN" required style="text-align:center; font-size:18px; letter-spacing:0.1em; margin-bottom:14px;">
             <button type="submit" class="button" style="width:100%;">Sign In ➔</button>
           </form>
         </div>
@@ -881,7 +1016,7 @@
 
           <!-- Organizer Live Settings Override -->
           <details style="margin-top:28px; background:var(--ink); padding:16px; border-radius:8px; border:1px solid var(--line);">
-            <summary style="font-size:14px; color:var(--gold); font-weight:600; padding:0;">⚙️ Organizer Live Settings (UPI ID &amp; Helpline)</summary>
+            <summary style="font-size:14px; color:var(--gold); font-weight:600; padding:0;">⚙️ Settings (UPI ID &amp; Helpline)</summary>
             <form onsubmit="handleSaveSettings(event)" style="margin-top:16px;">
               <div class="form-row">
                 <div class="form-group">
