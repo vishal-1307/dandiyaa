@@ -17,7 +17,6 @@
     venue: "Marwadi Vivah Bhavan, Jaynagar",
     organizer: "Motion Arts Academy",
     whatsappNumber: "917050551310", // WhatsApp submission number
-    whatsappGroupLink: "https://chat.whatsapp.com/FJt21SRONmx3cnrgsd2QK0?s=sh&p=a&mlu=4&ilr=4&iam=",
     upiId: "8252969861lol@ibl",     // PhonePe / UPI ID
     payeeName: "Mr SONU KUMAR BHANDARI",
     adminPin: "motion13",
@@ -441,19 +440,8 @@
       }
     }
 
-    // Render Pass Gate QR Code
-    const passQrCanvas = document.getElementById('pass-qr-canvas');
-    if (passQrCanvas && window.QRCode) {
-      const qrData = `JMU-PASS:${pass.passId}|${pass.name}|${pass.category}|${pass.phone}|${pass.amount}|19OCT2026`;
-      window.QRCode.toCanvas(passQrCanvas, qrData, {
-        width: 140,
-        margin: 2,
-        color: {
-          dark: '#111714',
-          light: '#ffffff'
-        }
-      });
-    }
+    const codeDisplayEl = document.getElementById('pass-code-display');
+    if (codeDisplayEl) codeDisplayEl.textContent = pass.passId;
 
     // Build WhatsApp Pre-Formatted Message
     let partnerInfo = '';
@@ -481,11 +469,6 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     const sendWaBtn = document.getElementById('btn-send-whatsapp-screenshot');
     if (sendWaBtn) {
       sendWaBtn.href = waUrl;
-    }
-
-    const waGroupLink = document.getElementById('btn-join-wa-group');
-    if (waGroupLink) {
-      waGroupLink.href = config.whatsappGroupLink;
     }
   }
 
@@ -555,11 +538,11 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
     if (myPasses.length > 0 && resultContainer) {
       renderLookupResult(myPasses[0]);
-      if (input) input.value = myPasses[0].phone || myPasses[0].passId;
+      if (input) input.value = myPasses[0].passId;
     } else if (resultContainer) {
       resultContainer.innerHTML = `
         <div class="empty-state">
-          <p>Apna 10-digit Phone number ya Pass ID enter karein apna pass dekhne ke liye.</p>
+          <p>Apna official Ticket ID (e.g. <code>JMU-7K29</code>) enter karein apna pass dekhne ke liye.</p>
         </div>`;
     }
   };
@@ -576,10 +559,24 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     if (e) e.preventDefault();
     const input = document.getElementById('mypass-search-input');
     const query = input ? input.value.trim().toUpperCase() : '';
-    const cleanPhone = query.replace(/\D/g, '');
 
     if (!query) {
-      showToast('Enter phone number or Pass ID', 'error');
+      showToast('Please enter your Ticket ID', 'error');
+      return;
+    }
+
+    // Check if user entered phone number instead of Pass ID
+    const isDigitsOnly = /^\d+$/.test(query.replace(/[\s-]/g, ''));
+    if (isDigitsOnly) {
+      showToast('Search by phone number is disabled for privacy. Please enter Ticket ID.', 'error');
+      const resultContainer = document.getElementById('mypass-results');
+      if (resultContainer) {
+        resultContainer.innerHTML = `
+          <div class="not-found-card">
+            <h4>Ticket ID Required</h4>
+            <p>Attendee privacy aur security ke liye phone number se search band kar diya gaya hai. Kripya booking ke baad generate hua apna official <strong>Ticket ID</strong> (e.g. <code>JMU-7K29</code>) enter karein.</p>
+          </div>`;
+      }
       return;
     }
 
@@ -587,24 +584,20 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     const mySaved = getMyPasses();
     const combined = [...mySaved, ...all];
 
-    const match = combined.find(item => {
-      if (item.passId.toUpperCase() === query) return true;
-      if (cleanPhone.length >= 10 && item.phone && item.phone.includes(cleanPhone)) return true;
-      return false;
-    });
+    const match = combined.find(item => item.passId && item.passId.toUpperCase() === query);
 
     const resultContainer = document.getElementById('mypass-results');
     if (match) {
       renderLookupResult(match);
-      showToast('✓ Pass found for ' + match.name, 'success');
+      showToast('✓ Pass found: ' + match.passId, 'success');
     } else {
       if (resultContainer) {
         resultContainer.innerHTML = `
           <div class="not-found-card">
-            <h4>Koi Pass Nahi Mila</h4>
-            <p>"${query}" ke liye koi registered pass nahi mila. Kripya check karein ya naya registration karein.</p>
+            <h4>Ticket ID Nahi Mila</h4>
+            <p>"${query}" ke liye koi registered pass nahi mila. Kripya apna valid Ticket ID check karein ya naya registration karein.</p>
             <div style="margin-top:16px;">
-              <button class="button small" onclick="closeMyPassModal(); openRegistrationModal();">Naya Pass Banayein</button>
+              <button class="button small" onclick="closeMyPassModal(); openRegistrationModal();">Book New Pass</button>
             </div>
           </div>`;
       }
