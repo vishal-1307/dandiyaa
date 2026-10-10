@@ -719,7 +719,7 @@
 
       <!-- Centered Developer Attribution (Middle bottom part) -->
       <div class="footer-bottom-credit">
-        <p>Developed with ❤️ by <a href="https://vishalthakur.tech" target="_blank" rel="noopener noreferrer">Vishal</a> • <a href="#admin" onclick="openAdminModal(); return false;" style="color:var(--muted); opacity:0.75; font-size:12px; margin-left:4px;">🔐 Organizer Portal</a></p>
+        <p>Developed with ❤️ by <a href="https://vishalthakur.tech" target="_blank" rel="noopener noreferrer">Vishal</a></p>
       </div>
     </div>
   </footer>
@@ -753,17 +753,10 @@
       </div>
 
       <div class="modal-content">
-        <!-- Wizard Progress Bar -->
-        <div class="wizard-progress">
-          <div class="step-indicator active" id="step-indicator-1"></div>
-          <div class="step-indicator" id="step-indicator-2"></div>
-          <div class="step-indicator" id="step-indicator-3"></div>
-        </div>
-
         <!-- STEP 1: CATEGORY SELECTION & ATTENDEE FORM -->
         <div class="wizard-step active" id="wizard-step-1">
           <p style="font-size:14px; color:var(--muted); margin-bottom:16px;">
-            Choose your booking category and provide your attendee details:
+            Choose your booking category and enter attendee details:
           </p>
 
           <div class="category-tabs">
@@ -823,82 +816,20 @@
 
             <div class="form-summary-card">
               <div>
-                <span id="reg-summary-category">Solo Pass (1 Person)</span>
-                <p style="font-size:12px; color:var(--muted); margin:2px 0 0;">Official festival entry included</p>
+                <span id="reg-summary-category">Solo Pass (1 Ticket)</span>
+                <p style="font-size:12px; color:var(--muted); margin:2px 0 0;">Instant verified digital entry pass</p>
               </div>
               <strong id="reg-summary-amount">₹249</strong>
             </div>
 
-            <button type="submit" class="button" style="width:100%;">
+            <button type="submit" class="button" style="width:100%;" id="btn-proceed-pay">
               <span id="btn-proceed-pay-text">Proceed to Payment (₹249) ➔</span>
             </button>
           </form>
         </div>
 
-        <!-- STEP 2: UPI PAYMENT & SCANNER -->
-        <div class="wizard-step" id="wizard-step-2">
-          <div class="payment-screen">
-            <div class="payment-summary-pill">
-              <div>
-                <span style="font-size:12px; color:var(--muted); display:block;">Booking Summary</span>
-                <strong id="pay-summary-name" style="font-size:16px; color:var(--paper);">Attendee Name</strong>
-                <span id="pay-summary-category" style="font-size:13px; color:var(--muted); display:block;">Solo Pass (₹249)</span>
-              </div>
-              <strong id="pay-summary-amount">₹249</strong>
-            </div>
-
-            <!-- Razorpay Online Pay Option -->
-            <div id="razorpay-btn-wrap" style="display:block; margin-bottom:18px;">
-              <button type="button" class="button" style="width:100%; background:linear-gradient(135deg, #0284c7, #0369a1); border-color:#38bdf8; box-shadow:0 4px 14px rgba(2,132,199,0.35); font-weight:700;" onclick="startRazorpayPayment()">
-                💳 Pay Online via Razorpay (Instant Approval) ➔
-              </button>
-              <div style="text-align:center; font-size:11.5px; color:var(--muted); margin-top:8px;">— YA NICHE DIRECT UPI APP / QR CODE SE PAY KAREIN —</div>
-            </div>
-
-            <p style="font-size:14px; color:var(--muted); margin-bottom:8px;">
-              Scan using any UPI App (PhonePe, Google Pay, Paytm, BHIM):
-            </p>
-
-            <!-- Dynamic QR Code Container -->
-            <div class="qr-scanner-card">
-              <canvas id="payment-qr-canvas" width="220" height="220"></canvas>
-              <p>Payee: <span id="pay-payee-display">Mr SONU KUMAR BHANDARI</span></p>
-            </div>
-
-            <div class="upi-id-box">
-              <div>
-                <span style="font-size:11px; color:var(--muted); display:block;">Official UPI ID</span>
-                <code id="pay-upi-id-display">8252969861lol@ibl</code>
-              </div>
-              <button type="button" class="button small outline" onclick="copyUpiId()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                <span>Copy UPI ID</span>
-              </button>
-            </div>
-
-            <!-- Mobile Direct UPI Pay Button -->
-            <div style="margin-bottom:18px;">
-              <a id="btn-upi-app-pay" class="button dark" style="width:100%;" href="#">
-                ⚡ Pay Directly via UPI App (Mobile)
-              </a>
-            </div>
-
-            <div class="pay-guide-steps">
-              <ol>
-                <li>1. UPI App khol kar ₹<span id="guide-amount">249</span> ka payment complete karein.</li>
-                <li>2. Successful payment ka <strong>screenshot</strong> le lein.</li>
-                <li>3. Neeche diye button par click karein apna <strong>Pass ID generate</strong> karne ke liye!</li>
-              </ol>
-            </div>
-
-            <button type="button" class="button" style="width:100%;" onclick="handlePaymentConfirmed()">
-              ✓ I Have Paid — Generate My Ticket Pass ➔
-            </button>
-          </div>
-        </div>
-
-        <!-- STEP 3: DIGITAL PASS GENERATED & WHATSAPP SUBMISSION -->
-        <div class="wizard-step" id="wizard-step-3">
+        <!-- STEP 3: DIGITAL PASS GENERATED & COMMUNITY GROUP -->
+        <div class="wizard-step" id="wizard-step-3" style="display:none;">
           <div class="pass-wrapper">
             <!-- Digital Pass Card -->
             <div class="digital-pass-card" id="digital-pass-card">
@@ -939,7 +870,7 @@
                 <div class="pass-id-plaque">
                   <span class="plaque-label">OFFICIAL PASS ID</span>
                   <strong class="plaque-code" id="pass-code-display">JMU-0000</strong>
-                  <span class="plaque-sub">✓ Valid Entry Pass</span>
+                  <span class="plaque-sub" style="color:#10b981;">✓ Approved Entry Pass</span>
                 </div>
               </div>
 
@@ -950,24 +881,19 @@
                 </div>
                 <div style="text-align:right;">
                   <strong id="pass-amount-display">₹249/-</strong><br>
-                  <span style="color:#10b981;">✓ Generated Pass</span>
+                  <span style="color:#10b981;">✓ Payment Verified</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- WhatsApp Submission Box (Red Alert Warning Style) -->
-          <div class="wa-instruction-card">
-            <strong class="instruction-title">⚠️ Important: Verification Step</strong>
-            Neeche diye button par click karein. WhatsApp par pre-filled details ke sath apna <strong class="highlight-text">Payment Screenshot</strong> attach karke send karein taaki gate par Pass confirm ho sake!
-          </div>
-
-          <div class="pass-actions-box">
-            <a id="btn-send-whatsapp-screenshot" class="button whatsapp-btn pulse-anim" href="#" target="_blank" rel="noopener noreferrer">
+          <!-- Official WhatsApp Group Invite Box -->
+          <div class="pass-actions-box" style="margin-top:20px;">
+            <a id="btn-join-whatsapp-group" class="button" href="https://chat.whatsapp.com/invite" target="_blank" rel="noopener noreferrer" style="width:100%; background:linear-gradient(135deg, #25D366, #128C7E); border-color:#25D366; box-shadow:0 4px 14px rgba(37,211,102,0.35); font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px; text-decoration:none;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0;">
                 <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
               </svg>
-              <span>Send Details &amp; Payment Screenshot on WhatsApp</span>
+              <span>💬 Join Official WhatsApp Attendees Group ➔</span>
             </a>
 
             <div class="pass-btn-row">
@@ -1073,12 +999,20 @@
 
           <!-- Gate Terminal Check-in Scanner -->
           <div class="gate-terminal-box">
-            <h4>Gate Entry Check-In Scanner</h4>
-            <form onsubmit="handleGateTerminalSubmit(event)" style="display:flex; gap:10px;">
-              <input type="text" id="gate-pass-input" class="form-control" placeholder="Enter or Scan Pass ID (e.g. JMU-9X7CX)" autocomplete="off">
-              <button type="submit" class="button small">Verify &amp; Admit</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+              <h4 style="margin:0;">🚪 Gate Entry Check-In Terminal</h4>
+              <span style="font-size:12px; color:var(--muted);">Verify Ticket ID to prevent duplicate entry</span>
+            </div>
+            <form onsubmit="handleGateTerminalSubmit(event)" style="display:flex; gap:10px; flex-wrap:wrap;">
+              <div style="flex:1; min-width:240px; position:relative;">
+                <input type="text" id="gate-pass-input" class="form-control" placeholder="Type or Paste Pass ID (e.g. JMU-XR7DP)" autocomplete="off" autocapitalize="characters" style="font-size:16px; font-weight:700; letter-spacing:0.05em; padding-right:36px;">
+                <button type="button" onclick="clearGateInput()" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--muted); font-size:18px; cursor:pointer;" aria-label="Clear input">✕</button>
+              </div>
+              <button type="submit" class="button" style="padding:10px 20px; font-weight:700; white-space:nowrap;">
+                🔍 Verify &amp; Admit
+              </button>
             </form>
-            <div id="gate-terminal-feedback"></div>
+            <div id="gate-terminal-feedback" style="display:none; margin-top:14px;"></div>
           </div>
 
           <!-- Filter & Search Controls -->
@@ -1117,26 +1051,17 @@
           </div>
 
           <!-- Organizer Live Settings Override -->
-          <details style="margin-top:28px; background:var(--ink); padding:16px; border-radius:8px; border:1px solid var(--line);">
-            <summary style="font-size:14px; color:var(--gold); font-weight:600; padding:0;">⚙️ Settings (UPI ID &amp; Helpline)</summary>
+          <details style="margin-top:28px; background:var(--ink); padding:18px; border-radius:10px; border:1px solid var(--line);">
+            <summary style="font-size:14px; color:var(--gold); font-weight:600; padding:0; cursor:pointer;">⚙️ Event &amp; Community Settings</summary>
             <form onsubmit="handleSaveSettings(event)" style="margin-top:16px;">
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="cfg-upi-id">Payment UPI ID</label>
-                  <input type="text" id="cfg-upi-id" class="form-control" required>
-                </div>
-                <div class="form-group">
-                  <label for="cfg-payee-name">Payee Name</label>
-                  <input type="text" id="cfg-payee-name" class="form-control" required>
-                </div>
+              <div class="form-group">
+                <label for="cfg-whatsapp-group">Official WhatsApp Attendees Group Link</label>
+                <input type="url" id="cfg-whatsapp-group" class="form-control" placeholder="https://chat.whatsapp.com/..." required>
+                <small style="color:var(--muted); font-size:12px; display:block; margin-top:4px;">Is link par click karke confirmed attendees ticket download karne ke baad official WhatsApp group me add ho sakte hain.</small>
               </div>
               <div class="form-group">
-                <label for="cfg-phone">WhatsApp Verification Helpline (without +)</label>
-                <input type="text" id="cfg-phone" class="form-control" placeholder="917050551310" required>
-              </div>
-              <div class="form-group">
-                <label for="cfg-razorpay-key">Razorpay Key ID <span style="font-size:12px; color:var(--muted); font-weight:normal;">(Optional - for online Cards / NetBanking / Instant UPI)</span></label>
-                <input type="text" id="cfg-razorpay-key" class="form-control" placeholder="rzp_live_...">
+                <label for="cfg-razorpay-key">Razorpay Key ID</label>
+                <input type="text" id="cfg-razorpay-key" class="form-control" placeholder="rzp_live_..." required>
               </div>
               <button type="submit" class="button small">Save Settings</button>
             </form>

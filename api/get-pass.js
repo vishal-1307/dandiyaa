@@ -40,6 +40,7 @@ module.exports = async function handler(req, res) {
         venue,
         organizer,
         checked_in as "checkedIn",
+        check_in_time as "checkInTime",
         COALESCE(status, 'pending') as "status",
         COALESCE(quantity, 1) as "quantity",
         COALESCE(payment_method, 'upi') as "paymentMethod",

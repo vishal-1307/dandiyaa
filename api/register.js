@@ -23,6 +23,17 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Security: Only authorized organizers can directly insert unverified passes.
+    // Attendees must complete Razorpay payment verification at /api/verify-payment.
+    const pin = req.headers['x-admin-pin'];
+    const correctPin = process.env.ADMIN_PIN || '#Rounak26';
+    if (pin !== correctPin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Direct registration is restricted. All attendees must complete online payment verification via Razorpay.'
+      });
+    }
+
     if (!pass || !pass.passId || !pass.name || !pass.phone) {
       return res.status(400).json({ success: false, error: 'Missing required pass fields (passId, name, phone)' });
     }

@@ -16,15 +16,14 @@
     eventTimestamp: new Date("2026-10-19T18:00:00+05:30").getTime(),
     venue: "Marwadi Vivah Bhavan, Jaynagar",
     organizer: "Motion Arts Academy",
-    whatsappNumber: "917050551310", // WhatsApp submission number
-    upiId: "8252969861lol@ibl",     // PhonePe / UPI ID
-    payeeName: "Mr SONU KUMAR BHANDARI",
-    adminPin: "motion13",
+    whatsappNumber: "917050551310",
+    adminPin: "#Rounak26",
+    whatsappGroupLink: "https://chat.whatsapp.com/invite",
     pricing: {
       solo: 249,
       couple: 399
     },
-    razorpayKeyId: "rzp_test_TmFBKDBb4nQgtD" // Razorpay Key ID
+    razorpayKeyId: "rzp_test_TmFBKDBb4nQgtD"
   };
 
   // Load any organizer-saved config overrides from localStorage
@@ -32,7 +31,13 @@
     try {
       const saved = localStorage.getItem('jmu_config_override');
       if (saved) {
-        return Object.assign({}, DEFAULT_CONFIG, JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Force upgrade PIN if older PIN was stored
+        if (parsed.adminPin && parsed.adminPin !== '#Rounak26') {
+          delete parsed.adminPin;
+          localStorage.setItem('jmu_config_override', JSON.stringify(parsed));
+        }
+        return Object.assign({}, DEFAULT_CONFIG, parsed);
       }
     } catch (e) {
       console.warn('Could not read config overrides:', e);
@@ -352,23 +357,19 @@
     wizardState.step = stepNumber;
 
     const step1El = document.getElementById('wizard-step-1');
-    const step2El = document.getElementById('wizard-step-2');
     const step3El = document.getElementById('wizard-step-3');
 
-    const bar1 = document.getElementById('step-indicator-1');
-    const bar2 = document.getElementById('step-indicator-2');
-    const bar3 = document.getElementById('step-indicator-3');
-
-    if (step1El) step1El.classList.toggle('active', stepNumber === 1);
-    if (step2El) step2El.classList.toggle('active', stepNumber === 2);
-    if (step3El) step3El.classList.toggle('active', stepNumber === 3);
-
-    if (bar1) bar1.classList.toggle('active', stepNumber >= 1);
-    if (bar2) bar2.classList.toggle('active', stepNumber >= 2);
-    if (bar3) bar3.classList.toggle('active', stepNumber >= 3);
+    if (step1El) {
+      step1El.style.display = (stepNumber === 1 ? 'block' : 'none');
+      step1El.classList.toggle('active', stepNumber === 1);
+    }
+    if (step3El) {
+      step3El.style.display = (stepNumber === 3 ? 'block' : 'none');
+      step3El.classList.toggle('active', stepNumber === 3);
+    }
   }
 
-  // Step 1 Validation & Proceed
+  // Step 1 Validation & Immediate Razorpay Checkout
   window.handleStep1Submit = function (e) {
     if (e) e.preventDefault();
 
@@ -422,80 +423,32 @@
       partnerPhone: partnerPhone
     };
 
-    renderStep2Payment();
-    setWizardStep(2);
+    // Immediately launch Razorpay Standard Checkout
+    startRazorpayPayment();
   };
 
-  // Step 2: Render Payment Screen & Dynamic QR
-  function renderStep2Payment() {
-    const config = getConfig();
-    const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple);
-    const qty = wizardState.quantity || 1;
-    const catLabel = wizardState.category === 'solo' 
-      ? `Solo Pass (${qty} ${qty === 1 ? 'Ticket' : 'Tickets'} · ₹${price})`
-      : 'Married Couple Pass (₹399)';
-
-    // Update text summaries
-    const payNameEl = document.getElementById('pay-summary-name');
-    const payCatEl = document.getElementById('pay-summary-category');
-    const payAmountEl = document.getElementById('pay-summary-amount');
-    const payUpiIdEl = document.getElementById('pay-upi-id-display');
-    const payeeNameEl = document.getElementById('pay-payee-display');
-    const guideAmountEl = document.getElementById('guide-amount');
-
-    if (payNameEl) payNameEl.textContent = wizardState.data.name;
-    if (payCatEl) payCatEl.textContent = catLabel;
-    if (payAmountEl) payAmountEl.textContent = `₹${price}`;
-    if (payUpiIdEl) payUpiIdEl.textContent = config.upiId;
-    if (payeeNameEl) payeeNameEl.textContent = config.payeeName;
-    if (guideAmountEl) guideAmountEl.textContent = price;
-
-    // Check Razorpay online pay button visibility
-    const rzpBtnWrap = document.getElementById('razorpay-btn-wrap');
-    if (rzpBtnWrap) {
-      rzpBtnWrap.style.display = config.razorpayKeyId ? 'block' : 'none';
-    }
-
-    // Direct UPI Deep Link for mobile
-    const upiIntent = `upi://pay?pa=${encodeURIComponent(config.upiId)}&pn=${encodeURIComponent(config.payeeName)}&am=${price}&cu=INR&tn=${encodeURIComponent('Jaynagar Milan Utsav 2026 Ticket')}`;
-    const upiPayAppBtn = document.getElementById('btn-upi-app-pay');
-    if (upiPayAppBtn) {
-      upiPayAppBtn.href = upiIntent;
-    }
-
-    // Render Dynamic QR Code via bundled QRCode library
-    const canvas = document.getElementById('payment-qr-canvas');
-    if (canvas && window.QRCode) {
-      window.QRCode.toCanvas(canvas, upiIntent, {
-        width: 220,
-        margin: 2,
-        color: {
-          dark: '#111714',
-          light: '#ffffff'
-        }
-      }, function (error) {
-        if (error) console.error('QR rendering error:', error);
-      });
-    }
-  }
-
-  // Razorpay Gateway Checkout Launcher
+  // Direct Razorpay Gateway Checkout Launcher
   window.startRazorpayPayment = async function () {
     const config = getConfig();
     if (typeof Razorpay === 'undefined') {
-      showToast('Razorpay SDK loading. Please try again in a few moments.', 'info');
+      showToast('Razorpay payment gateway is loading. Please try again in a moment.', 'info');
       return;
     }
 
-    const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple);
-    const qty = wizardState.quantity || 1;
+    const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo * (wizardState.quantity || 1) : config.pricing.couple);
+    const qty = wizardState.category === 'solo' ? (wizardState.quantity || 1) : 1;
     const passId = generatePassId();
 
-    const payBtn = document.querySelector('#razorpay-btn-wrap button');
-    const originalBtnText = payBtn ? payBtn.innerHTML : '';
-    if (payBtn) {
-      payBtn.disabled = true;
-      payBtn.innerHTML = '⏳ Initializing Secure Checkout...';
+    const payBtn = document.getElementById('btn-proceed-pay');
+    const payBtnText = document.getElementById('btn-proceed-pay-text');
+    const defaultBtnLabel = `Proceed to Payment (₹${price}) ➔`;
+
+    if (payBtn) payBtn.disabled = true;
+    if (payBtnText) payBtnText.textContent = '⏳ Initializing Secure Checkout...';
+
+    function resetPayBtn() {
+      if (payBtn) payBtn.disabled = false;
+      if (payBtnText) payBtnText.textContent = defaultBtnLabel;
     }
 
     try {
@@ -504,7 +457,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: Math.round(price * 100), // paise
+          amount: Math.round(price * 100), // in paise
           currency: 'INR',
           receipt: passId
         })
@@ -521,7 +474,7 @@
         amount: orderData.amount,
         currency: orderData.currency,
         name: "Jaynagar Milan Utsav 2026",
-        description: `${wizardState.category === 'solo' ? 'Solo Pass' : 'Married Couple Pass'} (${qty} Ticket${qty > 1 ? 's' : ''})`,
+        description: `${wizardState.category === 'solo' ? 'Solo Pass' : 'Married Couple Pass'} (${qty} ${qty > 1 ? 'Tickets' : 'Ticket'})`,
         image: "assets/jmu-logo-small.webp",
         order_id: orderData.order_id,
         prefill: {
@@ -538,17 +491,14 @@
         },
         modal: {
           ondismiss: function () {
-            showToast('Payment window closed. You can retry or pay via direct UPI.', 'info');
-            if (payBtn) {
-              payBtn.disabled = false;
-              payBtn.innerHTML = originalBtnText;
-            }
+            showToast('Payment window closed. Click Proceed to try again.', 'info');
+            resetPayBtn();
           }
         },
         handler: async function (response) {
           // Received razorpay_payment_id, razorpay_order_id, razorpay_signature
-          if (payBtn) {
-            payBtn.innerHTML = '🔐 Verifying Payment Signature...';
+          if (payBtnText) {
+            payBtnText.textContent = '🔐 Verifying Payment Signature...';
           }
           showToast('Verifying payment signature with server...', 'info');
 
@@ -593,10 +543,7 @@
             const verifyData = await verifyRes.json();
             if (!verifyData.success) {
               showToast('⚠️ Payment Verification Failed: ' + (verifyData.error || 'Invalid signature'), 'error');
-              if (payBtn) {
-                payBtn.disabled = false;
-                payBtn.innerHTML = originalBtnText;
-              }
+              resetPayBtn();
               return;
             }
 
@@ -611,10 +558,7 @@
           } catch (vErr) {
             console.error('Verify error:', vErr);
             showToast('Verification error: ' + vErr.message, 'error');
-            if (payBtn) {
-              payBtn.disabled = false;
-              payBtn.innerHTML = originalBtnText;
-            }
+            resetPayBtn();
           }
         }
       };
@@ -624,19 +568,13 @@
         console.error('Razorpay payment failed:', failResp.error);
         const reason = (failResp.error && (failResp.error.description || failResp.error.reason)) || 'Payment was declined or cancelled';
         showToast('❌ Payment Failed: ' + reason, 'error');
-        if (payBtn) {
-          payBtn.disabled = false;
-          payBtn.innerHTML = originalBtnText;
-        }
+        resetPayBtn();
       });
       rzp.open();
     } catch (err) {
       console.error('Razorpay init error:', err);
       showToast('Error starting payment: ' + err.message, 'error');
-      if (payBtn) {
-        payBtn.disabled = false;
-        payBtn.innerHTML = originalBtnText;
-      }
+      resetPayBtn();
     }
   };
 
@@ -732,71 +670,19 @@
     const codeDisplayEl = document.getElementById('pass-code-display');
     if (codeDisplayEl) codeDisplayEl.textContent = pass.passId;
 
-    // Build WhatsApp Pre-Formatted Message
-    let partnerInfo = '';
-    if (pass.partnerName) {
-      partnerInfo = `👫 Partner / Spouse: ${pass.partnerName}\n`;
+    // Official WhatsApp Group Button
+    const joinWaBtn = document.getElementById('btn-join-whatsapp-group');
+    if (joinWaBtn && config.whatsappGroupLink) {
+      joinWaBtn.href = config.whatsappGroupLink;
     }
 
-    const qty = Number(pass.quantity) || 1;
-    const qtyLine = qty > 1 ? `🎟️ Total Tickets: ${qty} Persons\n` : '';
-
-    const waMessage = 
-`🌸 JAYNAGAR MILAN UTSAV 2026 🌸
-━━━━━━━━━━━━━━━━━━━━
-🎫 Pass ID: ${pass.passId}
-👤 Attendee Name: ${pass.name}
-🏷️ Category: ${pass.category} (₹${pass.amount})
-${qtyLine}📞 Mobile: ${pass.phone}
-${pass.address && pass.address.trim() ? `📍 Address: ${pass.address}\n` : ''}${partnerInfo}💰 Registration Fee: ₹${pass.amount}/-
-📅 Date: 19 October 2026 • 6:00 PM – 10:00 PM
-📍 Venue: Marwadi Vivah Bhavan, Jaynagar
-━━━━━━━━━━━━━━━━━━━━
-📸 Payment Verification: Maine ₹${pass.amount} ka payment successfully kar diya hai.
-Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm karein. Dhanyawad! 🙏`;
-
-    const waUrl = `https://wa.me/${config.whatsappNumber}?text=${encodeURIComponent(waMessage)}`;
-    const sendWaBtn = document.getElementById('btn-send-whatsapp-screenshot');
-    if (sendWaBtn) {
-      sendWaBtn.href = waUrl;
-    }
-
-    // Update status plaque & instruction card for approved vs pending
+    // Update status plaque
     const plaqueSub = document.querySelector('.plaque-sub');
     if (plaqueSub) {
-      if (pass.status === 'approved') {
-        plaqueSub.textContent = '✓ Approved Entry Pass';
-        plaqueSub.style.color = '#10b981';
-      } else {
-        plaqueSub.textContent = '⏳ Pending Verification';
-        plaqueSub.style.color = '#fbbf24';
-      }
-    }
-
-    const waInstructionCard = document.querySelector('.wa-instruction-card');
-    if (waInstructionCard) {
-      if (pass.status === 'approved') {
-        waInstructionCard.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-        waInstructionCard.style.background = 'rgba(16, 185, 129, 0.1)';
-        waInstructionCard.innerHTML = `<strong class="instruction-title" style="color:#10b981;">✓ Online Payment Verified &amp; Approved!</strong> Aapka Razorpay payment verify ho chuka hai aur Entry Pass gate ke liye direct approved hai. Neeche diye button se apna Pass download kar lein!`;
-      } else {
-        waInstructionCard.style.borderColor = '';
-        waInstructionCard.style.background = '';
-        waInstructionCard.innerHTML = `<strong class="instruction-title">⚠️ Important: Verification Step</strong> Neeche diye button par click karein. WhatsApp par pre-filled details ke sath apna <strong class="highlight-text">Payment Screenshot</strong> attach karke send karein taaki gate par Pass confirm ho sake!`;
-      }
+      plaqueSub.textContent = '✓ Approved Entry Pass';
+      plaqueSub.style.color = '#10b981';
     }
   }
-
-  // WhatsApp Submission Action
-  window.submitPaymentScreenshotWhatsApp = function () {
-    const config = getConfig();
-    if (!wizardState.currentPass) return;
-    const sendWaBtn = document.getElementById('btn-send-whatsapp-screenshot');
-    if (sendWaBtn && sendWaBtn.href) {
-      window.open(sendWaBtn.href, '_blank');
-      showToast('Opening WhatsApp... Please attach your payment screenshot in the chat!', 'info');
-    }
-  };
 
   // Copy Pass ID
   window.copyCurrentPassId = function () {
@@ -1080,13 +966,9 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
     // Populate Settings tab values
     const config = getConfig();
-    const cfgUpiInput = document.getElementById('cfg-upi-id');
-    const cfgPayeeInput = document.getElementById('cfg-payee-name');
-    const cfgPhoneInput = document.getElementById('cfg-phone');
+    const cfgWaGroupInput = document.getElementById('cfg-whatsapp-group');
     const cfgRzpInput = document.getElementById('cfg-razorpay-key');
-    if (cfgUpiInput) cfgUpiInput.value = config.upiId;
-    if (cfgPayeeInput) cfgPayeeInput.value = config.payeeName;
-    if (cfgPhoneInput) cfgPhoneInput.value = config.whatsappNumber;
+    if (cfgWaGroupInput) cfgWaGroupInput.value = config.whatsappGroupLink || 'https://chat.whatsapp.com/invite';
     if (cfgRzpInput) cfgRzpInput.value = config.razorpayKeyId || '';
 
     // Render local cache first for instant feedback, then fetch latest from cloud
@@ -1262,7 +1144,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
             <strong style="font-family:var(--font-mono); color:var(--gold); font-size:13.5px;">${escapeHtml(item.passId)}</strong>
           </td>
           <td>
-            <strong style="color:#fff;">${escapeHtml(item.name)}</strong>
+            <strong style="#fff;">${escapeHtml(item.name)}</strong>
             ${item.partnerName ? `<div style="font-size:12px; color:var(--gold); margin-top:2px;">+ ${escapeHtml(item.partnerName)}</div>` : ''}
             <div style="font-size:11px; color:var(--muted); margin-top:2px;">${escapeHtml(item.address || '-')}</div>
           </td>
@@ -1393,7 +1275,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     }
   };
 
-  // Gate Check-in verification terminal
+  // Gate Check-in verification terminal with duplicate detection & 1-tap admission
   window.handleGateTerminalSubmit = async function (e) {
     if (e) e.preventDefault();
     const input = document.getElementById('gate-pass-input');
@@ -1402,6 +1284,11 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     const config = getConfig();
 
     if (!query) return;
+
+    if (feedbackEl) {
+      feedbackEl.style.display = 'block';
+      feedbackEl.innerHTML = `<div style="text-align:center; padding:12px; color:var(--gold);">Verifying Ticket ID...</div>`;
+    }
 
     let match = adminPassesCache.find(r => (r.passId && r.passId.toUpperCase() === query) || r.phone === query);
     if (!match) {
@@ -1427,42 +1314,127 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
     if (!match) {
       if (feedbackEl) {
-        feedbackEl.className = 'gate-feedback error';
-        feedbackEl.innerHTML = `❌ <strong>PASS NOT FOUND</strong><br>Code "${escapeHtml(query)}" is not in the system roster.`;
+        feedbackEl.style.display = 'block';
+        feedbackEl.innerHTML = `
+          <div style="background:rgba(239,68,68,0.15); border:2px solid #ef4444; border-radius:10px; padding:16px; text-align:center;">
+            <div style="font-size:30px; margin-bottom:4px;">❌</div>
+            <strong style="color:#ef4444; font-size:16px; display:block; letter-spacing:0.02em;">TICKET NOT FOUND / INVALID</strong>
+            <p style="color:var(--snow); font-size:13px; margin:6px 0 0;">Code "${escapeHtml(query)}" is not registered in the system roster.</p>
+          </div>
+        `;
       }
       return;
     }
 
+    const qty = Number(match.quantity) || 1;
+    const isApproved = match.status === 'approved';
+
+    // Duplicate Entry Check: Has this ticket already entered?
     if (match.checkedIn) {
       if (feedbackEl) {
-        feedbackEl.className = 'gate-feedback warning';
-        feedbackEl.innerHTML = `⚠️ <strong>ALREADY CHECKED IN!</strong><br>${escapeHtml(match.name)} (${escapeHtml(match.category)}) was already admitted at gate.`;
+        feedbackEl.style.display = 'block';
+        feedbackEl.innerHTML = `
+          <div style="background:rgba(239,68,68,0.22); border:2px solid #ef4444; border-radius:10px; padding:18px; text-align:center;">
+            <div style="font-size:32px; margin-bottom:4px;">🚫</div>
+            <strong style="color:#f87171; font-size:17px; display:block; letter-spacing:0.02em;">ENTRY DENIED — ALREADY CHECKED IN!</strong>
+            <p style="color:#fca5a5; font-size:13px; margin:6px 0 12px; font-weight:600;">Duplicate Entry Alert! This ticket was already admitted at the gate.</p>
+            <div style="background:rgba(0,0,0,0.5); border-radius:8px; padding:12px 16px; font-size:13px; text-align:left; color:#fff; display:inline-block; min-width:260px;">
+              <div><strong>Pass ID:</strong> <span style="color:var(--gold); font-family:var(--font-mono);">${escapeHtml(match.passId)}</span></div>
+              <div><strong>Attendee:</strong> ${escapeHtml(match.name)}</div>
+              <div><strong>Allowed Persons:</strong> ${qty} ${qty > 1 ? 'Persons' : 'Person'}</div>
+              <div><strong>Admitted At:</strong> <span style="color:#fbbf24; font-weight:700;">${escapeHtml(match.checkInTime || 'Earlier today')}</span></div>
+            </div>
+            <div style="margin-top:14px;">
+              <button type="button" class="button dark small" onclick="toggleCheckIn('${escapeHtml(match.passId)}')">Undo Check-In (Allow Re-Entry)</button>
+            </div>
+          </div>
+        `;
       }
-    } else {
-      match.checkedIn = true;
-      match.checkInTime = new Date().toLocaleTimeString('en-IN');
-      saveRegistration(match);
-      renderAdminData();
+      return;
+    }
 
-      if (feedbackEl) {
-        feedbackEl.className = 'gate-feedback success';
-        feedbackEl.innerHTML = `✅ <strong>ENTRY APPROVED!</strong><br>Welcome <strong>${escapeHtml(match.name)}</strong> • ${escapeHtml(match.category)} • Admitted.`;
-      }
-      showToast('✓ Entry verified: ' + match.passId, 'success');
-      if (input) input.value = '';
+    // Valid Ticket - Ready for Check-in
+    if (feedbackEl) {
+      feedbackEl.style.display = 'block';
+      feedbackEl.innerHTML = `
+        <div style="background:rgba(16,185,129,0.15); border:2px solid #10b981; border-radius:10px; padding:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div>
+              <span style="background:${isApproved ? '#10b981' : '#f59e0b'}; color:#000; font-weight:800; font-size:11px; padding:3px 8px; border-radius:4px; text-transform:uppercase;">
+                ${isApproved ? '✓ VALID & APPROVED' : '⚠️ PENDING CASH VERIFICATION'}
+              </span>
+              <h4 style="margin:8px 0 4px; font-size:18px; color:#fff;">${escapeHtml(match.name)}</h4>
+              <div style="font-size:13px; color:var(--gold);">
+                <strong>Pass ID:</strong> <span style="font-family:var(--font-mono);">${escapeHtml(match.passId)}</span> · <strong>${escapeHtml(match.category)}</strong>
+              </div>
+              ${match.partnerName ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">Partner: ${escapeHtml(match.partnerName)}</div>` : ''}
+              <div style="font-size:13.5px; color:var(--snow); margin-top:6px;">
+                🎟️ <strong>Admit Allowed:</strong> <span style="font-size:16px; font-weight:800; color:#38bdf8;">${qty} ${qty > 1 ? 'Persons' : 'Person'}</span>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:18px; font-weight:700; color:var(--gold); margin-bottom:8px;">₹${escapeHtml(match.amount)}</div>
+              <button type="button" class="button" style="background:#10b981; border-color:#10b981; color:#fff; font-weight:800; padding:10px 18px;" onclick="confirmGateAdmit('${escapeHtml(match.passId)}')">
+                ✅ CONFIRM CHECK-IN &amp; ALLOW ENTRY (${qty} ${qty > 1 ? 'Pax' : 'Pax'})
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  };
 
-      try {
-        await fetch('/api/all-passes', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-admin-pin': config.adminPin
-          },
-          body: JSON.stringify({ action: 'checkin', passId: match.passId, checkedIn: true })
-        });
-      } catch (err) {
-        // ignore
-      }
+  // Confirm Gate Admission
+  window.confirmGateAdmit = async function (passId) {
+    const config = getConfig();
+    let match = adminPassesCache.find(r => r.passId === passId) || getRegistrations().find(r => r.passId === passId);
+    if (!match) return;
+
+    match.checkedIn = true;
+    match.checkInTime = new Date().toLocaleTimeString('en-IN');
+    saveRegistration(match);
+    renderAdminData();
+
+    const feedbackEl = document.getElementById('gate-terminal-feedback');
+    if (feedbackEl) {
+      feedbackEl.style.display = 'block';
+      feedbackEl.innerHTML = `
+        <div style="background:rgba(16,185,129,0.25); border:2px solid #10b981; border-radius:10px; padding:16px; text-align:center;">
+          <div style="font-size:30px; margin-bottom:4px;">🎉</div>
+          <strong style="color:#10b981; font-size:17px; display:block;">ENTRY CONFIRMED &amp; ADMITTED!</strong>
+          <p style="margin:6px 0 0; font-size:13px; color:#fff;">Attendee <strong>${escapeHtml(match.name)}</strong> (${match.quantity || 1} Persons) admitted at ${match.checkInTime}.</p>
+        </div>
+      `;
+    }
+    const input = document.getElementById('gate-pass-input');
+    if (input) input.value = '';
+    showToast(`✓ Admitted: ${passId}`, 'success');
+
+    try {
+      await fetch('/api/all-passes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': config.adminPin
+        },
+        body: JSON.stringify({ action: 'checkin', passId: match.passId, checkedIn: true })
+      });
+    } catch (err) {
+      console.warn('Checkin sync error:', err);
+    }
+  };
+
+  // Clear Gate Terminal Input & Feedback
+  window.clearGateInput = function () {
+    const input = document.getElementById('gate-pass-input');
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    const feedbackEl = document.getElementById('gate-terminal-feedback');
+    if (feedbackEl) {
+      feedbackEl.style.display = 'none';
+      feedbackEl.innerHTML = '';
     }
   };
 
@@ -1558,21 +1530,11 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
   // Save Settings from Admin Panel
   window.handleSaveSettings = function (e) {
     if (e) e.preventDefault();
-    const upi = document.getElementById('cfg-upi-id').value.trim();
-    const payee = document.getElementById('cfg-payee-name').value.trim();
-    const phone = document.getElementById('cfg-phone').value.trim();
-    const rzpKeyInput = document.getElementById('cfg-razorpay-key');
-    const rzpKey = rzpKeyInput ? rzpKeyInput.value.trim() : '';
-
-    if (!upi || !payee) {
-      showToast('UPI ID and Payee Name are required', 'error');
-      return;
-    }
+    const waGroup = (document.getElementById('cfg-whatsapp-group')?.value || '').trim();
+    const rzpKey = (document.getElementById('cfg-razorpay-key')?.value || '').trim();
 
     saveConfigOverride({
-      upiId: upi,
-      payeeName: payee,
-      whatsappNumber: phone,
+      whatsappGroupLink: waGroup,
       razorpayKeyId: rzpKey
     });
 
