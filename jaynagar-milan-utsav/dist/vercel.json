@@ -1,0 +1,5 @@
+{
+  "framework": null,
+  "buildCommand": "node -e \"throw new Error('Legacy deployment disabled. Set the Vercel project root to the repository root.')\"",
+  "outputDirectory": "__legacy_deployment_disabled__"
+}

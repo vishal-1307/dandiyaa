@@ -1,0 +1,156 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const ui=require('../security-ui');
+const source=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+function browserFixture(fetch){
+  class Element{
+    constructor(tag='div'){this.tagName=tag.toUpperCase();this.textContent='';this.innerHTML='';this.value='';this.disabled=false;this.style={};this.dataset={};this.children=[];this.listeners={};this.classList={add(){},remove(){},toggle(){}};}
+    appendChild(child){this.children.push(child);return child;}replaceChildren(...children){this.children=children;this.textContent='';}
+    addEventListener(type,handler){this.listeners[type]=handler;}contains(child){return this.children.includes(child);}closest(){return this;}focus(){}click(){}remove(){}
+  }
+  const elements=new Map(),listeners={},storage=new Map([['jmu_registrations_v1','private legacy roster'],['jmu_my_passes','private legacy passes']]);
+  const doc={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);},
+    createElement(tag){return new Element(tag);},querySelector(){return new Element();},querySelectorAll(){return [];},addEventListener(type,fn){listeners[type]=fn;},body:new Element()};
+  const store={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
+  const qr=[];const context={document:doc,localStorage:store,sessionStorage:store,fetch,JmuSecurityUI:ui,JmuPricing:require('../campaign-config'),console,URL,URLSearchParams,TextEncoder,
+    crypto:require('node:crypto').webcrypto,Uint8Array,Blob,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
+    location:{hash:'',origin:'https://event.example',pathname:'/',search:''},history:{replaceState(){}},navigator:{},QRCode:{toCanvas:(canvas,text,opts,cb)=>{qr.push(text);cb(null);}},prompt:()=>null,confirm:()=>false};
+  context.window=context;vm.createContext(context);vm.runInContext(source,context);listeners.DOMContentLoaded();
+  return {context,doc,elements,listeners,storage,qr,Element};
+}
+const response=data=>({ok:true,status:200,json:async()=>({success:true,...data})});
+test('Solo stepper updates quantities one through ten through delegated controls and enforces both bounds',()=>{
+  const browser=browserFixture(async()=>response({}));browser.context.openRegistrationModal();
+  const get=id=>browser.doc.getElementById(id),minus=get('solo-quantity-decrease'),plus=get('solo-quantity-increase');
+  minus.dataset={uiHandler:'stepSoloQuantity',uiArgs:'[-1]'};plus.dataset={uiHandler:'stepSoloQuantity',uiArgs:'[1]'};
+  const click=button=>browser.listeners.click({target:button});
+  const expectQuantity=quantity=>{
+    assert.equal(get('solo-quantity-value').textContent,String(quantity));
+    const price=require('../campaign-config').CATALOG.solo/100*quantity;
+    assert.equal(get('reg-summary-amount').textContent,'₹'+price);
+    assert.equal(get('btn-proceed-pay-text').textContent,'Pay Now · ₹'+price+' ➔');
+    assert.ok(get('reg-summary-category').textContent.includes('('+quantity+' '));
+    assert.equal(minus.disabled,quantity===1);assert.equal(plus.disabled,quantity===10);
+  };
+  expectQuantity(1);click(minus);expectQuantity(1);
+  for(let quantity=2;quantity<=10;quantity++){click(plus);expectQuantity(quantity);}
+  click(plus);expectQuantity(10);
+  for(const invalid of [0,-1,11,1.5,'2',NaN,Infinity,null]){browser.context.setSoloQuantity(invalid);expectQuantity(10);}
+  for(let quantity=9;quantity>=1;quantity--){click(minus);expectQuantity(quantity);}
+  browser.context.stepSoloQuantity(9);expectQuantity(1);
+  browser.context.setSoloQuantity(3);browser.context.closeRegistrationModal();browser.context.openRegistrationModal();expectQuantity(1);
+});
+test('Couple pricing and quantity remain fixed and returning to Solo resets the stepper',()=>{
+  const browser=browserFixture(async()=>response({}));browser.context.setSoloQuantity(4);browser.context.selectWizardCategory('couple');
+  assert.equal(browser.doc.getElementById('solo-quantity-group').style.display,'none');
+  browser.context.stepSoloQuantity(1);browser.context.setSoloQuantity(4);
+  assert.equal(browser.doc.getElementById('reg-summary-amount').textContent,'₹399');
+  browser.context.selectWizardCategory('solo');
+  assert.equal(browser.doc.getElementById('solo-quantity-group').style.display,'block');
+  assert.equal(browser.doc.getElementById('solo-quantity-value').textContent,'1');
+  assert.equal(browser.doc.getElementById('solo-quantity-decrease').disabled,true);
+  assert.equal(browser.doc.getElementById('reg-summary-amount').textContent,'₹249');
+});
+test('stepper uses labelled native non-submit buttons, live output, and visible interaction states',()=>{
+  assert.ok(!html.includes('qty-pill'));
+  assert.ok(!/Max \d+ tickets per booking|Festival Entry \(1[–-]\d+ Persons\)/.test(html));
+  for(const [id,label] of [['decrease','Decrease'],['increase','Increase']]){
+    const button=html.match(new RegExp('<button id="solo-quantity-'+id+'"[^>]+>'))[0];
+    assert.ok(button.includes('type="button"'));assert.ok(button.includes('aria-label="'+label+' ticket quantity"'));
+    assert.ok(button.includes('aria-controls="solo-quantity-value"'));
+    if(id==='decrease')assert.ok(button.includes(' disabled'));
+  }
+  assert.match(html,/<output id="solo-quantity-value"[^>]*aria-live="polite"[^>]*>1<\/output>/);
+  const css=fs.readFileSync(path.join(__dirname,'../styles-v2.css'),'utf8');
+  for(const state of [':hover:not(:disabled)',':active:not(:disabled)',':focus-visible',':disabled'])assert.ok(css.includes('.quantity-stepper-button'+state));
+  assert.match(css,/\.quantity-stepper-button\s*\{[^}]*min-height:\s*48px/);
+});
+const attendee={passId:'JMU-'+ 'A'.repeat(32),name:"'); globalThis.pwned=true; // <img src=x onerror=alert(1)>",partnerName:'<script>alert(1)</script>',phone:'9999999999',address:'<svg onload=alert(1)>',category:'Solo Pass',capacity:1,quantity:1,amount:249,status:'approved',paymentState:'verified',checkedIn:false,isDeleted:false,dateStr:'19 October 2026',timeStr:'6–10 PM'};
+test('CSV quotes and neutralizes spreadsheet formula and control prefixes',()=>{
+  for(const value of ['=HYPERLINK("x")',' +SUM(1)','\t@cmd','-42','\rmalicious'])assert.ok(ui.csvCell(value).startsWith('"\''));
+  assert.equal(ui.csvCell('a,"b"'),'"a,""b"""');assert.equal(ui.csvCell(null),'""');
+});
+test('delegated actions only invoke the allowlisted action, with strings treated as data',()=>{
+  let listener,received;const button={dataset:{action:'checkin',passId:"');evil()//"}};
+  ui.bindActions({addEventListener:(_,fn)=>{listener=fn;},contains:()=>true},{checkin:id=>{received=id;}});
+  listener({target:{closest:()=>button}});assert.equal(received,button.dataset.passId);
+  button.dataset.action='constructor';received=null;listener({target:{closest:()=>button}});assert.equal(received,null);
+});
+test('HTML has no inline event handlers, bindings resolve, and CSP permits no inline JavaScript',()=>{
+  assert.equal(/\son(?:click|submit|input|error|load)\s*=/i.test(html),false);
+  const browser=browserFixture(async()=>response({}));for(const match of html.matchAll(/data-ui-handler="([^"]+)"/g))assert.equal(typeof browser.context[match[1]],'function',match[1]);
+  for(const match of html.matchAll(/data-ui-args="([^"]*)"/g))assert.doesNotThrow(()=>JSON.parse(match[1].replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&')));
+  const csp=require('../vercel.json').headers[0].headers.find(h=>h.key==='Content-Security-Policy').value;
+  assert.ok(!csp.split(';').find(v=>v.trim().startsWith('script-src')).includes('unsafe-inline'));
+  const structured=html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1];
+  const hash=require('node:crypto').createHash('sha256').update(structured).digest('base64');assert.ok(csp.includes('sha256-'+hash));
+});
+test('actual roster rendering escapes stored attacker names, never embeds them in JavaScript and keeps data in memory',async()=>{
+  const browser=browserFixture(async url=>response(url==='/api/admin-session'?{csrfToken:'fixture-csrf',expires:Date.now()+1800000}:{passes:[attendee]}));
+  browser.doc.getElementById('admin-pin-input').value='fixture-organizer-password';await browser.context.handleAdminLogin();
+  const table=browser.doc.getElementById('admin-registrations-tbody').innerHTML,cards=browser.doc.getElementById('admin-registrations-cards').innerHTML;
+  for(const markup of [table,cards]){assert.ok(markup.includes('&lt;'));assert.ok(!markup.includes('<img'));assert.ok(!/\sonclick=/.test(markup));assert.ok(markup.includes('data-action="checkin"'));}
+  assert.equal(browser.context.pwned,undefined);assert.equal(browser.storage.has('jmu_registrations_v1'),false);assert.equal(browser.storage.has('jmu_my_passes'),false);
+  assert.ok(![...browser.storage.values()].some(value=>value.includes(attendee.name)));
+});
+test('digital pass generates an ID-only QR and name text without recovery capabilities or contact information',()=>{
+  const browser=browserFixture(async()=>response({}));browser.context.handlePaymentConfirmed(attendee);
+  assert.equal(browser.doc.getElementById('pass-name-display').textContent,attendee.name);assert.deepEqual(browser.qr,[attendee.passId]);
+  assert.equal(browser.doc.getElementById('pass-phone-wrap').style.display,'none');assert.equal(browser.doc.getElementById('pass-addr-wrap').style.display,'none');
+  assert.equal(browser.doc.getElementById('pass-code-display').textContent,attendee.passId);
+});
+test('gate UI cannot show success before server confirmation and rejects an offline admission',async()=>{
+  let resolveCheckin;let gateCalled=false;const browser=browserFixture(async(url,options={})=>{
+    if(url==='/api/admin-session')return response({csrfToken:'fixture-csrf',expires:Date.now()+1800000});
+    if(url.startsWith('/api/get-pass'))return response({pass:attendee});
+    if(options.method==='POST'){gateCalled=true;return new Promise(resolve=>{resolveCheckin=resolve;});}
+    return response({passes:[attendee]});
+  });
+  browser.doc.getElementById('admin-pin-input').value='fixture-password';await browser.context.handleAdminLogin();
+  browser.doc.getElementById('gate-pass-input').value=attendee.passId;await browser.context.handleGateTerminalSubmit();
+  const box=browser.doc.getElementById('gate-terminal-feedback'),button=box.children.find(child=>child.dataset.action==='checkin');assert.ok(button);
+  box.listeners.click({target:button});await new Promise(setImmediate);assert.equal(gateCalled,true);assert.ok(!box.children.some(child=>child.textContent.includes('ENTRY CONFIRMED')));
+  resolveCheckin({ok:false,status:503,json:async()=>({success:false,error:'Server unavailable'})});await new Promise(setImmediate);await new Promise(setImmediate);
+  assert.ok(!box.children.some(child=>child.textContent.includes('ENTRY CONFIRMED')));assert.equal(button.disabled,false);
+});
+test('gate success follows committed server timestamp and group capacity',async()=>{
+  const committed={...attendee,capacity:2,checkedIn:true,checkInTime:'2026-10-19T12:30:00Z'};
+  const browser=browserFixture(async(url,options={})=>response(url==='/api/admin-session'?{csrfToken:'fixture',expires:Date.now()+1800000}:url.startsWith('/api/get-pass')?{pass:attendee}:options.method==='POST'?{pass:committed}:{passes:[attendee]}));
+  await browser.context.handleAdminLogin();browser.doc.getElementById('gate-pass-input').value=attendee.passId;await browser.context.handleGateTerminalSubmit();
+  const box=browser.doc.getElementById('gate-terminal-feedback');box.listeners.click({target:box.children.find(child=>child.dataset.action==='checkin')});await new Promise(setImmediate);await new Promise(setImmediate);
+  assert.ok(box.children.some(child=>child.textContent.includes('ENTRY CONFIRMED')&&child.textContent.includes('2 persons')));
+});
+test('existing QR bundle exposes the renderer used by the actual pass',()=>{
+  const context={window:{},console,Uint8Array,Uint16Array,ArrayBuffer,TextEncoder};vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../qrcode.bundle.js'),'utf8'),context);assert.equal(typeof context.window.QRCode.toCanvas,'function');
+});
+test('actual checkout displays mixed server pricing and submits no client promotion eligibility',async()=>{
+  let options,request;const booking={passId:attendee.passId,recoveryToken:'a'.repeat(43),order_id:'order_fixture',amount:89600,currency:'INR',key_id:'fixture-key',
+    pricing:{promotionalQuantity:2,regularQuantity:2,promotionalUnitPaise:19900,regularUnitPaise:24900},promotionExpiresAt:new Date(Date.now()+1200000).toISOString()};
+  const browser=browserFixture(async(url,opts={})=>{if(url==='/api/create-order'){request=JSON.parse(opts.body);return response(booking);}return response({pass:{...attendee,status:'pending',paymentState:'pending'}});});
+  browser.context.Razorpay=function(value){options=value;this.on=()=>{};this.open=()=>{};};browser.context.setSoloQuantity(4);
+  browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';browser.context.handleStep1Submit();
+  for(let i=0;i<20&&!options;i++)await new Promise(setImmediate);
+  assert.ok(options);assert.equal(options.amount,89600);assert.equal(options.description,'Solo · 2 early-bird + 2 regular');
+  assert.equal(request.quantity,4);for(const field of ['amount','price','promotion','promotionalQuantity','earlyBird'])assert.equal(request[field],undefined);
+  assert.ok(browser.doc.getElementById('reg-pricing-detail').textContent.includes('2 early-bird × ₹199 + 2 regular × ₹249 = ₹896'));
+});
+test('active checkout locks booking controls and retains the server price after dismissal',async()=>{
+  let options,requested,releaseQuote,paymentFailed;const quoteGate=new Promise(resolve=>{releaseQuote=resolve;});
+  const booking={passId:attendee.passId,recoveryToken:'a'.repeat(43),order_id:'order_lockedfixture',amount:89600,currency:'INR',key_id:'fixture-key',pricing:{promotionalQuantity:2,regularQuantity:2,promotionalUnitPaise:19900,regularUnitPaise:24900}};
+  const browser=browserFixture(async(url,opts)=>{if(url==='/api/create-order'){requested=JSON.parse(opts.body);await quoteGate;return response(booking);}return response({pass:{...attendee,status:'pending'}});});
+  browser.context.Razorpay=function(value){options=value;this.on=(event,fn)=>{if(event==='payment.failed')paymentFailed=fn;};this.open=()=>{};};
+  browser.context.setSoloQuantity(4);browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';browser.context.handleStep1Submit();
+  for(let i=0;i<20&&!requested;i++)await new Promise(setImmediate);
+  assert.ok(requested);assert.equal(browser.doc.getElementById('solo-quantity-increase').disabled,true);
+  browser.context.stepSoloQuantity(1);browser.context.selectWizardCategory('couple');
+  assert.equal(browser.doc.getElementById('solo-quantity-value').textContent,'4');
+  releaseQuote();for(let i=0;i<20&&!options;i++)await new Promise(setImmediate);assert.ok(options);
+  assert.equal(browser.doc.getElementById('reg-summary-amount').textContent,'₹896');
+  assert.equal(browser.doc.getElementById('btn-proceed-pay-text').textContent,'Pay Now · ₹896 ➔');
+  assert.equal(typeof paymentFailed,'function');paymentFailed({error:{description:'Fixture failure'}});
+  assert.equal(browser.doc.getElementById('solo-quantity-increase').disabled,true,'Razorpay may still offer retries after a failed attempt');
+  options.modal.ondismiss();assert.equal(browser.doc.getElementById('btn-proceed-pay-text').textContent,'Pay Now · ₹896 ➔');
+  assert.equal(browser.doc.getElementById('solo-quantity-increase').disabled,false);
+  browser.context.stepSoloQuantity(1);assert.equal(browser.doc.getElementById('reg-summary-amount').textContent,'₹1245');
+});

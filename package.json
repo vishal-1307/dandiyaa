@@ -1,0 +1,41 @@
+{
+  "name": "dandiyaa",
+  "version": "1.0.0",
+  "description": "Official Event & Registration Website for **Jaynagar Milan Utsav 2026** (Dandiya & Jhijhiya Special Night), organised with pride by **Motion Arts Academy**.",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "node scripts/build-static.js",
+    "check": "node scripts/check.js",
+    "test:postgres": "node --test tests/postgres/*.test.js",
+    "db:preflight": "node scripts/migrate.js --preflight",
+    "db:migrate:local": "node scripts/migrate.js --apply",
+    "dev": "node scripts/dev-server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vishal-1307/dandiyaa.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vishal-1307/dandiyaa/issues"
+  },
+  "homepage": "https://github.com/vishal-1307/dandiyaa#readme",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "dotenv": "^18.0.7",
+    "razorpay": "^2.9.8"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "devDependencies": {
+    "pg": "^8.23.1"
+  }
+}
