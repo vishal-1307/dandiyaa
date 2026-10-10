@@ -40,7 +40,8 @@ module.exports = async function handler(req, res) {
         venue,
         organizer,
         checked_in as "checkedIn",
-        COALESCE(status, 'pending') as "status"
+        COALESCE(status, 'pending') as "status",
+        COALESCE(quantity, 1) as "quantity"
       FROM jmu_passes 
       WHERE UPPER(pass_id) = ${cleanId}
       LIMIT 1;
@@ -53,6 +54,7 @@ module.exports = async function handler(req, res) {
     const pass = rows[0];
     pass.amount = Number(pass.amount);
     pass.timestamp = Number(pass.timestamp);
+    pass.quantity = Number(pass.quantity) || 1;
 
     return res.status(200).json({ success: true, pass });
   } catch (err) {

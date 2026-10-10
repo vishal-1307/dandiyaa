@@ -23,7 +23,8 @@
     pricing: {
       solo: 249,
       couple: 399
-    }
+    },
+    razorpayKeyId: "" // Optional Razorpay Key ID (e.g. rzp_live_...)
   };
 
   // Load any organizer-saved config overrides from localStorage
@@ -131,11 +132,12 @@
   let wizardState = {
     category: 'solo',
     step: 1,
+    quantity: 1,
+    amount: 249,
     data: {
       name: '',
       phone: '',
       address: '',
-      insta: '',
       partnerName: '',
       partnerPhone: ''
     },
@@ -271,6 +273,33 @@
     }
   };
 
+  // Quantity selection for Solo Pass (Max 4 tickets)
+  window.setSoloQuantity = function (qty) {
+    const config = getConfig();
+    const cleanQty = Math.max(1, Math.min(4, Number(qty) || 1));
+    wizardState.quantity = cleanQty;
+
+    // Update active pill styling
+    document.querySelectorAll('.qty-pill-btn').forEach(btn => {
+      btn.classList.toggle('active', Number(btn.getAttribute('data-qty')) === cleanQty);
+    });
+
+    const price = config.pricing.solo * cleanQty;
+    wizardState.amount = price;
+
+    const summaryAmount = document.getElementById('reg-summary-amount');
+    const summaryCat = document.getElementById('reg-summary-category');
+    const proceedBtnText = document.getElementById('btn-proceed-pay-text');
+
+    if (summaryAmount) summaryAmount.textContent = `₹${price}`;
+    if (summaryCat) {
+      summaryCat.textContent = `Solo Pass (${cleanQty} ${cleanQty === 1 ? 'Person' : 'Persons / Tickets'})`;
+    }
+    if (proceedBtnText) {
+      proceedBtnText.textContent = `Proceed to Payment (₹${price}) ➔`;
+    }
+  };
+
   function updateCategorySelection(category) {
     wizardState.category = category;
     const config = getConfig();
@@ -278,33 +307,43 @@
     const soloBtn = document.getElementById('cat-btn-solo');
     const coupleBtn = document.getElementById('cat-btn-couple');
     const coupleFields = document.getElementById('couple-fields-group');
+    const soloQtyGroup = document.getElementById('solo-quantity-group');
     const summaryAmount = document.getElementById('reg-summary-amount');
     const summaryCat = document.getElementById('reg-summary-category');
+    const proceedBtnText = document.getElementById('btn-proceed-pay-text');
 
     if (soloBtn && coupleBtn) {
       soloBtn.classList.toggle('active', category === 'solo');
       coupleBtn.classList.toggle('active', category === 'couple');
     }
 
-    if (coupleFields) {
-      if (category === 'couple') {
-        coupleFields.style.display = 'block';
-      } else {
-        coupleFields.style.display = 'none';
+    if (category === 'couple') {
+      if (coupleFields) coupleFields.style.display = 'block';
+      if (soloQtyGroup) soloQtyGroup.style.display = 'none';
+      wizardState.quantity = 1;
+      const price = config.pricing.couple;
+      wizardState.amount = price;
+
+      if (summaryAmount) summaryAmount.textContent = `₹${price}`;
+      if (summaryCat) summaryCat.textContent = 'Couple Pass (Married Couple)';
+      if (proceedBtnText) proceedBtnText.textContent = `Proceed to Payment (₹${price}) ➔`;
+    } else {
+      if (coupleFields) coupleFields.style.display = 'none';
+      if (soloQtyGroup) soloQtyGroup.style.display = 'block';
+      const qty = wizardState.quantity || 1;
+      const price = config.pricing.solo * qty;
+      wizardState.amount = price;
+
+      // Ensure active pill button matches
+      document.querySelectorAll('.qty-pill-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.getAttribute('data-qty')) === qty);
+      });
+
+      if (summaryAmount) summaryAmount.textContent = `₹${price}`;
+      if (summaryCat) {
+        summaryCat.textContent = `Solo Pass (${qty} ${qty === 1 ? 'Person' : 'Persons / Tickets'})`;
       }
-    }
-
-    const price = category === 'solo' ? config.pricing.solo : config.pricing.couple;
-    if (summaryAmount) {
-      summaryAmount.textContent = `₹${price}`;
-    }
-    if (summaryCat) {
-      summaryCat.textContent = category === 'solo' ? 'Solo Pass (1 Person)' : 'Couple Pass (Married Couple)';
-    }
-
-    const proceedBtnText = document.getElementById('btn-proceed-pay-text');
-    if (proceedBtnText) {
-      proceedBtnText.textContent = `Proceed to Payment (₹${price}) ➔`;
+      if (proceedBtnText) proceedBtnText.textContent = `Proceed to Payment (₹${price}) ➔`;
     }
   }
   window.selectWizardCategory = updateCategorySelection;
@@ -336,14 +375,12 @@
     const nameInput = document.getElementById('reg-name');
     const phoneInput = document.getElementById('reg-phone');
     const addressInput = document.getElementById('reg-address');
-    const instaInput = document.getElementById('reg-insta');
     const partnerNameInput = document.getElementById('reg-partner-name');
     const partnerPhoneInput = document.getElementById('reg-partner-phone');
 
     const name = nameInput ? nameInput.value.trim() : '';
     const phone = phoneInput ? phoneInput.value.trim().replace(/\D/g, '') : '';
     const address = addressInput ? addressInput.value.trim() : '';
-    const insta = instaInput ? instaInput.value.trim() : '';
 
     const indianPhoneRegex = /^[6-9]\d{9}$/;
 
@@ -356,12 +393,6 @@
     if (!phone || !indianPhoneRegex.test(phone)) {
       showToast('Please enter a valid 10-digit Indian WhatsApp/Mobile number', 'error');
       if (phoneInput) phoneInput.focus();
-      return;
-    }
-
-    if (!address || address.length < 3) {
-      showToast('Please enter your address or city', 'error');
-      if (addressInput) addressInput.focus();
       return;
     }
 
@@ -382,12 +413,11 @@
       }
     }
 
-    // Defensive capping of string lengths
+    // Defensive capping of string lengths (address is optional)
     wizardState.data = {
       name: name.slice(0, 60),
       phone: phone,
-      address: address.slice(0, 120),
-      insta: insta ? insta.slice(0, 40) : '',
+      address: address ? address.slice(0, 120) : '',
       partnerName: partnerName ? partnerName.slice(0, 60) : '',
       partnerPhone: partnerPhone
     };
@@ -399,8 +429,11 @@
   // Step 2: Render Payment Screen & Dynamic QR
   function renderStep2Payment() {
     const config = getConfig();
-    const price = wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple;
-    const catLabel = wizardState.category === 'solo' ? 'Solo Pass (₹249)' : 'Married Couple Pass (₹399)';
+    const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple);
+    const qty = wizardState.quantity || 1;
+    const catLabel = wizardState.category === 'solo' 
+      ? `Solo Pass (${qty} ${qty === 1 ? 'Ticket' : 'Tickets'} · ₹${price})`
+      : 'Married Couple Pass (₹399)';
 
     // Update text summaries
     const payNameEl = document.getElementById('pay-summary-name');
@@ -408,12 +441,20 @@
     const payAmountEl = document.getElementById('pay-summary-amount');
     const payUpiIdEl = document.getElementById('pay-upi-id-display');
     const payeeNameEl = document.getElementById('pay-payee-display');
+    const guideAmountEl = document.getElementById('guide-amount');
 
     if (payNameEl) payNameEl.textContent = wizardState.data.name;
     if (payCatEl) payCatEl.textContent = catLabel;
     if (payAmountEl) payAmountEl.textContent = `₹${price}`;
     if (payUpiIdEl) payUpiIdEl.textContent = config.upiId;
     if (payeeNameEl) payeeNameEl.textContent = config.payeeName;
+    if (guideAmountEl) guideAmountEl.textContent = price;
+
+    // Check Razorpay online pay button visibility
+    const rzpBtnWrap = document.getElementById('razorpay-btn-wrap');
+    if (rzpBtnWrap) {
+      rzpBtnWrap.style.display = config.razorpayKeyId ? 'block' : 'none';
+    }
 
     // Direct UPI Deep Link for mobile
     const upiIntent = `upi://pay?pa=${encodeURIComponent(config.upiId)}&pn=${encodeURIComponent(config.payeeName)}&am=${price}&cu=INR&tn=${encodeURIComponent('Jaynagar Milan Utsav 2026 Ticket')}`;
@@ -438,6 +479,49 @@
     }
   }
 
+  // Razorpay Gateway Checkout Launcher
+  window.startRazorpayPayment = function () {
+    const config = getConfig();
+    if (!config.razorpayKeyId) {
+      showToast('Razorpay Key not configured. Please use direct UPI QR below.', 'info');
+      return;
+    }
+    if (typeof Razorpay === 'undefined') {
+      showToast('Razorpay SDK loading. Please try again in a few seconds.', 'info');
+      return;
+    }
+
+    const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple);
+    const qty = wizardState.quantity || 1;
+
+    const options = {
+      key: config.razorpayKeyId,
+      amount: Math.round(price * 100), // in paise
+      currency: "INR",
+      name: "Jaynagar Milan Utsav 2026",
+      description: `${wizardState.category === 'solo' ? 'Solo Pass' : 'Couple Pass'} (${qty} Ticket(s))`,
+      image: "assets/jmu-logo-small.webp",
+      prefill: {
+        name: wizardState.data.name,
+        contact: wizardState.data.phone
+      },
+      theme: {
+        color: "#8B1E3F"
+      },
+      handler: function (response) {
+        showToast('✓ Payment Successful via Razorpay!', 'success');
+        handlePaymentConfirmed({
+          paymentMethod: 'Razorpay',
+          paymentId: response.razorpay_payment_id,
+          status: 'approved'
+        });
+      }
+    };
+
+    const rzp = new Razorpay(options);
+    rzp.open();
+  };
+
   window.copyUpiId = function () {
     const config = getConfig();
     if (navigator.clipboard) {
@@ -452,27 +536,32 @@
   };
 
   // Step 2 -> Step 3: Confirm Payment & Generate Pass
-  window.handlePaymentConfirmed = function () {
+  window.handlePaymentConfirmed = function (paymentMeta = {}) {
     const config = getConfig();
-    const price = wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple;
+    const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple);
     const passId = generatePassId();
+    const isOnlineApproved = paymentMeta && paymentMeta.status === 'approved';
 
     const pass = {
       passId: passId,
-      category: wizardState.category === 'solo' ? 'Solo Pass' : 'Married Couple Pass',
+      category: wizardState.category === 'solo' 
+        ? (wizardState.quantity > 1 ? `Solo Pass (${wizardState.quantity} Tickets)` : 'Solo Pass')
+        : 'Married Couple Pass',
+      quantity: wizardState.category === 'solo' ? (wizardState.quantity || 1) : 1,
       amount: price,
       name: wizardState.data.name,
       phone: wizardState.data.phone,
-      address: wizardState.data.address,
-      insta: wizardState.data.insta && wizardState.data.insta.trim() ? (wizardState.data.insta.trim().startsWith('@') ? wizardState.data.insta.trim() : '@' + wizardState.data.insta.trim()) : '',
-      partnerName: wizardState.data.partnerName,
-      partnerPhone: wizardState.data.partnerPhone,
+      address: wizardState.data.address || '',
+      insta: '',
+      partnerName: wizardState.data.partnerName || null,
+      partnerPhone: wizardState.data.partnerPhone || null,
       timestamp: Date.now(),
       dateStr: config.eventDate,
       timeStr: config.eventTime,
       venue: config.venue,
       organizer: config.organizer,
-      checkedIn: false
+      checkedIn: false,
+      status: isOnlineApproved ? 'approved' : 'pending'
     };
 
     wizardState.currentPass = pass;
@@ -497,27 +586,18 @@
     const catEl = document.getElementById('pass-cat-display');
     const phoneEl = document.getElementById('pass-phone-display');
     const addrEl = document.getElementById('pass-addr-display');
-    const instaEl = document.getElementById('pass-insta-display');
-    const instaWrap = document.getElementById('pass-insta-wrap');
     const partnerWrap = document.getElementById('pass-partner-wrap');
     const partnerNameEl = document.getElementById('pass-partner-display');
     const amountEl = document.getElementById('pass-amount-display');
 
     if (nameEl) nameEl.textContent = pass.name;
-    if (catEl) catEl.textContent = pass.category;
-    if (phoneEl) phoneEl.textContent = pass.phone;
-    if (addrEl) addrEl.textContent = pass.address;
-    if (amountEl) amountEl.textContent = `₹${pass.amount}/-`;
-
-    // Only display Instagram if user entered a value (omit if blank, never show N/A)
-    if (instaWrap) {
-      if (pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A') {
-        instaWrap.style.display = 'block';
-        if (instaEl) instaEl.textContent = pass.insta;
-      } else {
-        instaWrap.style.display = 'none';
-      }
+    if (catEl) {
+      const q = Number(pass.quantity) || 1;
+      catEl.textContent = `${pass.category} ${q > 1 ? `· ${q} Persons` : ''}`;
     }
+    if (phoneEl) phoneEl.textContent = pass.phone;
+    if (addrEl) addrEl.textContent = pass.address && pass.address.trim() ? pass.address : 'Jaynagar';
+    if (amountEl) amountEl.textContent = `₹${pass.amount}/-`;
 
     if (partnerWrap) {
       if (pass.partnerName) {
@@ -537,10 +617,8 @@
       partnerInfo = `👫 Partner / Spouse: ${pass.partnerName}\n`;
     }
 
-    let instaInfo = '';
-    if (pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A') {
-      instaInfo = `📸 Instagram: ${pass.insta}\n`;
-    }
+    const qty = Number(pass.quantity) || 1;
+    const qtyLine = qty > 1 ? `🎟️ Total Tickets: ${qty} Persons\n` : '';
 
     const waMessage = 
 `🌸 JAYNAGAR MILAN UTSAV 2026 🌸
@@ -548,9 +626,8 @@
 🎫 Pass ID: ${pass.passId}
 👤 Attendee Name: ${pass.name}
 🏷️ Category: ${pass.category} (₹${pass.amount})
-📞 Mobile: ${pass.phone}
-📍 Address: ${pass.address}
-${instaInfo}${partnerInfo}💰 Registration Fee: ₹${pass.amount}/-
+${qtyLine}📞 Mobile: ${pass.phone}
+${pass.address && pass.address.trim() ? `📍 Address: ${pass.address}\n` : ''}${partnerInfo}💰 Registration Fee: ₹${pass.amount}/-
 📅 Date: 19 October 2026 • 6:00 PM – 10:00 PM
 📍 Venue: Marwadi Vivah Bhavan, Jaynagar
 ━━━━━━━━━━━━━━━━━━━━
@@ -747,6 +824,10 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       partnerHtml = `<div class="lookup-field"><span>Partner:</span> <strong>${escapeHtml(pass.partnerName)}</strong></div>`;
     }
 
+    const qtyBadge = pass.quantity && Number(pass.quantity) > 1 
+      ? `<span class="badge badge-gold" style="font-size:11px; margin-left:6px;">${pass.quantity} Tickets</span>` 
+      : '';
+
     const isApproved = pass.status === 'approved';
     const statusBadge = isApproved
       ? `<span class="badge badge-success" style="font-size:12px; padding:4px 8px;">✓ Payment Verified &amp; Approved</span>`
@@ -754,6 +835,10 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
     const gateBadge = pass.checkedIn
       ? `<span class="status-pill checked-in" style="margin-left:6px;">🚪 Admitted at Gate</span>`
+      : '';
+
+    const addrHtml = pass.address && pass.address.trim() && pass.address !== '-'
+      ? `<div class="lookup-field"><span>Address:</span> <strong>${escapeHtml(pass.address)}</strong></div>`
       : '';
 
     resultContainer.innerHTML = `
@@ -767,10 +852,9 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
         </div>
         <div class="lookup-body">
           <div class="lookup-field"><span>Attendee:</span> <strong>${escapeHtml(pass.name)}</strong></div>
-          <div class="lookup-field"><span>Category:</span> <strong>${escapeHtml(pass.category)} (₹${escapeHtml(pass.amount)})</strong></div>
+          <div class="lookup-field"><span>Category:</span> <strong>${escapeHtml(pass.category)} (₹${escapeHtml(pass.amount)})</strong>${qtyBadge}</div>
           <div class="lookup-field"><span>Mobile:</span> <strong>${escapeHtml(pass.phone)}</strong></div>
-          <div class="lookup-field"><span>Address:</span> <strong>${escapeHtml(pass.address)}</strong></div>
-          ${pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A' ? `<div class="lookup-field"><span>Instagram:</span> <strong>${escapeHtml(pass.insta)}</strong></div>` : ''}
+          ${addrHtml}
           ${partnerHtml}
           <div class="lookup-field"><span>Event Date:</span> <strong>19 October 2026 • 6:00–10:00 PM</strong></div>
           <div class="lookup-field"><span>Venue:</span> <strong>Marwadi Vivah Bhavan, Jaynagar</strong></div>
@@ -853,9 +937,11 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     const cfgUpiInput = document.getElementById('cfg-upi-id');
     const cfgPayeeInput = document.getElementById('cfg-payee-name');
     const cfgPhoneInput = document.getElementById('cfg-phone');
+    const cfgRzpInput = document.getElementById('cfg-razorpay-key');
     if (cfgUpiInput) cfgUpiInput.value = config.upiId;
     if (cfgPayeeInput) cfgPayeeInput.value = config.payeeName;
     if (cfgPhoneInput) cfgPhoneInput.value = config.whatsappNumber;
+    if (cfgRzpInput) cfgRzpInput.value = config.razorpayKeyId || '';
 
     // Render local cache first for instant feedback, then fetch latest from cloud
     adminPassesCache = getRegistrations();
@@ -1036,7 +1122,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
           </td>
           <td>
             <span class="badge ${item.category && item.category.includes('Couple') ? 'badge-gold' : 'badge-wine'}">${escapeHtml(item.category || 'Solo')}</span>
-            <div style="font-size:12px; font-weight:600; color:var(--gold); margin-top:3px;">₹${escapeHtml(item.amount || '199')}</div>
+            <div style="font-size:12px; font-weight:600; color:var(--gold); margin-top:3px;">₹${escapeHtml(item.amount || '249')} · ${item.quantity || 1} Ticket(s)</div>
           </td>
           <td>
             <a href="tel:${escapeHtml(item.phone)}" style="font-weight:600; color:var(--snow); text-decoration:none;">${escapeHtml(item.phone)}</a>
@@ -1284,11 +1370,11 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       "Pass ID",
       "Status",
       "Category",
+      "Tickets Count",
       "Amount",
       "Attendee Name",
       "Mobile",
       "Address",
-      "Instagram",
       "Partner Name",
       "Partner Mobile",
       "Booking Date",
@@ -1300,11 +1386,11 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       safeCsvCell(item.passId),
       safeCsvCell(item.status === 'approved' ? 'Approved' : 'Pending'),
       safeCsvCell(item.category),
+      safeCsvCell(item.quantity || 1),
       safeCsvCell(item.amount),
       safeCsvCell(item.name),
       safeCsvCell(item.phone),
       safeCsvCell(item.address),
-      safeCsvCell(item.insta),
       safeCsvCell(item.partnerName),
       safeCsvCell(item.partnerPhone),
       safeCsvCell(item.timestamp ? new Date(item.timestamp).toLocaleString('en-IN') : ''),
@@ -1329,6 +1415,8 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     const upi = document.getElementById('cfg-upi-id').value.trim();
     const payee = document.getElementById('cfg-payee-name').value.trim();
     const phone = document.getElementById('cfg-phone').value.trim();
+    const rzpKeyInput = document.getElementById('cfg-razorpay-key');
+    const rzpKey = rzpKeyInput ? rzpKeyInput.value.trim() : '';
 
     if (!upi || !payee) {
       showToast('UPI ID and Payee Name are required', 'error');
@@ -1338,7 +1426,8 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     saveConfigOverride({
       upiId: upi,
       payeeName: payee,
-      whatsappNumber: phone
+      whatsappNumber: phone,
+      razorpayKeyId: rzpKey
     });
 
     showToast('✓ Settings updated and saved!', 'success');

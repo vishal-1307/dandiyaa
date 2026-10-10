@@ -2345,3 +2345,42 @@ footer {
     animation: none !important;
   }
 }
+
+/* Solo Ticket Quantity Selector Pills */
+.qty-pill-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 14px;
+}
+.qty-pill-btn {
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  color: var(--snow);
+  padding: 10px 4px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+.qty-pill-btn:hover {
+  border-color: var(--gold);
+  background: rgba(230, 188, 112, 0.1);
+}
+.qty-pill-btn.active {
+  background: var(--gold);
+  color: #120907;
+  border-color: var(--gold);
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(230, 188, 112, 0.35);
+}
+@media (max-width: 480px) {
+  .qty-pill-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+

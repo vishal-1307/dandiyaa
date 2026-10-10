@@ -121,6 +121,7 @@ module.exports = async function handler(req, res) {
         organizer,
         checked_in as "checkedIn",
         COALESCE(status, 'pending') as "status",
+        COALESCE(quantity, 1) as "quantity",
         created_at as "createdAt"
       FROM jmu_passes 
       ORDER BY timestamp DESC;
@@ -129,6 +130,7 @@ module.exports = async function handler(req, res) {
     const formatted = rows.map(r => ({
       ...r,
       amount: Number(r.amount),
+      quantity: Number(r.quantity) || 1,
       timestamp: Number(r.timestamp)
     }));
 

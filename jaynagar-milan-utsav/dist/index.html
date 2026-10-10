@@ -46,6 +46,7 @@
   <meta name="apple-mobile-web-app-title" content="Milan Utsav">
 
   <link rel="stylesheet" href="styles-v2.css">
+  <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
   <script src="qrcode.bundle.js" defer></script>
   <script src="html2canvas.bundle.js" defer></script>
   <script src="app.js" defer></script>
@@ -768,12 +769,25 @@
           <div class="category-tabs">
             <button type="button" class="cat-tab-btn active" id="cat-btn-solo" onclick="selectWizardCategory('solo')">
               <strong>Solo Pass · ₹249</strong>
-              <span>1 Person Festival Entry</span>
+              <span>Festival Entry (1–4 Persons)</span>
             </button>
             <button type="button" class="cat-tab-btn" id="cat-btn-couple" onclick="selectWizardCategory('couple')">
               <strong>Couple Pass · ₹399</strong>
               <span>Married Couple Entry</span>
             </button>
+          </div>
+
+          <!-- Solo Pass Quantity Selector (1 to 4 Tickets) -->
+          <div id="solo-quantity-group" style="margin-bottom:16px;">
+            <label style="font-size:13px; color:var(--snow); font-weight:600; display:block; margin-bottom:8px;">
+              🎟️ Select Ticket Quantity <span style="font-size:12px; color:var(--gold); font-weight:normal;">(Max 4 tickets per person)</span>:
+            </label>
+            <div class="qty-pill-row">
+              <button type="button" class="qty-pill-btn active" data-qty="1" onclick="setSoloQuantity(1)">1 Ticket · ₹249</button>
+              <button type="button" class="qty-pill-btn" data-qty="2" onclick="setSoloQuantity(2)">2 Tickets · ₹498</button>
+              <button type="button" class="qty-pill-btn" data-qty="3" onclick="setSoloQuantity(3)">3 Tickets · ₹747</button>
+              <button type="button" class="qty-pill-btn" data-qty="4" onclick="setSoloQuantity(4)">4 Tickets · ₹996</button>
+            </div>
           </div>
 
           <form id="reg-form-step1" onsubmit="handleStep1Submit(event)">
@@ -782,21 +796,14 @@
               <input type="text" id="reg-name" class="form-control" placeholder="e.g. Rahul Sharma" maxlength="60" required autocomplete="name">
             </div>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label for="reg-phone">WhatsApp / Mobile Number <span class="req">*</span></label>
-                <input type="tel" id="reg-phone" class="form-control" placeholder="10-digit number" maxlength="10" pattern="[6-9][0-9]{9}" inputmode="numeric" required autocomplete="tel" title="Please enter a valid 10-digit Indian mobile number">
-              </div>
-
-              <div class="form-group">
-                <label for="reg-insta">Instagram ID <span>(Optional)</span></label>
-                <input type="text" id="reg-insta" class="form-control" placeholder="@username" maxlength="40">
-              </div>
+            <div class="form-group">
+              <label for="reg-phone">WhatsApp / Mobile Number <span class="req">*</span></label>
+              <input type="tel" id="reg-phone" class="form-control" placeholder="10-digit number" maxlength="10" pattern="[6-9][0-9]{9}" inputmode="numeric" required autocomplete="tel" title="Please enter a valid 10-digit Indian mobile number">
             </div>
 
             <div class="form-group">
-              <label for="reg-address">Full Address / City <span class="req">*</span></label>
-              <input type="text" id="reg-address" class="form-control" placeholder="e.g. Station Road, Jaynagar" maxlength="120" required autocomplete="street-address">
+              <label for="reg-address">Full Address / City <span style="font-size:12px; color:var(--muted); font-weight:normal;">(Optional)</span></label>
+              <input type="text" id="reg-address" class="form-control" placeholder="e.g. Station Road, Jaynagar (Optional)" maxlength="120" autocomplete="street-address">
             </div>
 
             <!-- Couple-Only Fields -->
@@ -838,6 +845,14 @@
                 <span id="pay-summary-category" style="font-size:13px; color:var(--muted); display:block;">Solo Pass (₹249)</span>
               </div>
               <strong id="pay-summary-amount">₹249</strong>
+            </div>
+
+            <!-- Razorpay Online Pay Option (Active when key is provided) -->
+            <div id="razorpay-btn-wrap" style="display:none; margin-bottom:18px;">
+              <button type="button" class="button" style="width:100%; background:linear-gradient(135deg, #2563eb, #1d4ed8); border-color:#3b82f6; box-shadow:0 4px 14px rgba(37,99,235,0.35); font-weight:700;" onclick="startRazorpayPayment()">
+                💳 Pay Online via Razorpay (Cards / UPI / NetBanking) ➔
+              </button>
+              <div style="text-align:center; font-size:11.5px; color:var(--muted); margin-top:8px;">— YA NICHE DIRECT UPI APP / QR CODE SE PAY KAREIN —</div>
             </div>
 
             <p style="font-size:14px; color:var(--muted); margin-bottom:8px;">
@@ -915,13 +930,9 @@
                     <span>Phone / WhatsApp</span>
                     <strong id="pass-phone-display">-</strong>
                   </div>
-                  <div class="pass-info-item">
+                  <div class="pass-info-item" id="pass-addr-wrap">
                     <span>Address</span>
                     <strong id="pass-addr-display">-</strong>
-                  </div>
-                  <div class="pass-info-item" id="pass-insta-wrap" style="display:none;">
-                    <span>Instagram Handle</span>
-                    <strong id="pass-insta-display">-</strong>
                   </div>
                 </div>
 
@@ -994,9 +1005,6 @@
           <input type="text" id="mypass-search-input" class="form-control" placeholder="Enter Ticket ID (e.g. JMU-7K29)" required autocomplete="off" autocapitalize="characters">
           <button type="submit" class="button small">Search Pass</button>
         </form>
-        <span style="display:block; font-size:11.5px; color:var(--muted); margin-top:8px;">
-          🔒 Attendee privacy suraksha ke liye search sirf Ticket ID se restricted hai (Phone number search disabled).
-        </span>
 
         <div class="lookup-results-wrap" id="mypass-results">
           <!-- Dynamic results injected here -->
@@ -1125,6 +1133,10 @@
               <div class="form-group">
                 <label for="cfg-phone">WhatsApp Verification Helpline (without +)</label>
                 <input type="text" id="cfg-phone" class="form-control" placeholder="917050551310" required>
+              </div>
+              <div class="form-group">
+                <label for="cfg-razorpay-key">Razorpay Key ID <span style="font-size:12px; color:var(--muted); font-weight:normal;">(Optional - for online Cards / NetBanking / Instant UPI)</span></label>
+                <input type="text" id="cfg-razorpay-key" class="form-control" placeholder="rzp_live_...">
               </div>
               <button type="submit" class="button small">Save Settings</button>
             </form>
