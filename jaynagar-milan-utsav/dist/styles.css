@@ -1428,6 +1428,7 @@ footer {
 .modal-content {
   padding: 24px;
   overflow-y: auto;
+  overflow-x: hidden;
   max-height: calc(92vh - 80px);
 }
 
@@ -1801,6 +1802,41 @@ footer {
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pass-btn-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pass-btn-row .button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  min-height: 46px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.pass-btn-row .button svg {
+  flex-shrink: 0;
+}
+
+.pass-btn-row .button span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wa-instruction-card {
@@ -2162,6 +2198,32 @@ footer {
   }
   .pass-qr-container {
     margin-top: 12px;
+  }
+  .modal-overlay {
+    padding: 12px 10px;
+  }
+  .modal-box {
+    max-height: 94vh;
+    border-radius: 12px;
+  }
+  .modal-header {
+    padding: 16px 16px;
+  }
+  .modal-content {
+    padding: 18px 14px;
+    overflow-x: hidden;
+  }
+  .digital-pass-card {
+    padding: 18px 14px;
+  }
+  .pass-btn-row {
+    gap: 8px;
+  }
+  .pass-btn-row .button {
+    padding: 10px 8px;
+    font-size: 13px;
+    min-height: 44px;
+    gap: 5px;
   }
   .form-row {
     grid-template-columns: 1fr;
