@@ -24,7 +24,7 @@
       solo: 249,
       couple: 399
     },
-    razorpayKeyId: "" // Optional Razorpay Key ID (e.g. rzp_live_...)
+    razorpayKeyId: "rzp_test_TmFBKDBb4nQgtD" // Razorpay Key ID
   };
 
   // Load any organizer-saved config overrides from localStorage
@@ -480,46 +480,164 @@
   }
 
   // Razorpay Gateway Checkout Launcher
-  window.startRazorpayPayment = function () {
+  window.startRazorpayPayment = async function () {
     const config = getConfig();
-    if (!config.razorpayKeyId) {
-      showToast('Razorpay Key not configured. Please use direct UPI QR below.', 'info');
-      return;
-    }
     if (typeof Razorpay === 'undefined') {
-      showToast('Razorpay SDK loading. Please try again in a few seconds.', 'info');
+      showToast('Razorpay SDK loading. Please try again in a few moments.', 'info');
       return;
     }
 
     const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple);
     const qty = wizardState.quantity || 1;
+    const passId = generatePassId();
 
-    const options = {
-      key: config.razorpayKeyId,
-      amount: Math.round(price * 100), // in paise
-      currency: "INR",
-      name: "Jaynagar Milan Utsav 2026",
-      description: `${wizardState.category === 'solo' ? 'Solo Pass' : 'Couple Pass'} (${qty} Ticket(s))`,
-      image: "assets/jmu-logo-small.webp",
-      prefill: {
-        name: wizardState.data.name,
-        contact: wizardState.data.phone
-      },
-      theme: {
-        color: "#8B1E3F"
-      },
-      handler: function (response) {
-        showToast('✓ Payment Successful via Razorpay!', 'success');
-        handlePaymentConfirmed({
-          paymentMethod: 'Razorpay',
-          paymentId: response.razorpay_payment_id,
-          status: 'approved'
-        });
+    const payBtn = document.querySelector('#razorpay-btn-wrap button');
+    const originalBtnText = payBtn ? payBtn.innerHTML : '';
+    if (payBtn) {
+      payBtn.disabled = true;
+      payBtn.innerHTML = '⏳ Initializing Secure Checkout...';
+    }
+
+    try {
+      // 1. Create order on backend (/api/create-order)
+      const orderRes = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: Math.round(price * 100), // paise
+          currency: 'INR',
+          receipt: passId
+        })
+      });
+
+      const orderData = await orderRes.json();
+      if (!orderData.success || !orderData.order_id) {
+        throw new Error(orderData.error || 'Failed to initialize payment order');
       }
-    };
 
-    const rzp = new Razorpay(options);
-    rzp.open();
+      // 2. Open Razorpay Checkout Modal
+      const options = {
+        key: orderData.key_id || config.razorpayKeyId || 'rzp_test_TmFBKDBb4nQgtD',
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "Jaynagar Milan Utsav 2026",
+        description: `${wizardState.category === 'solo' ? 'Solo Pass' : 'Married Couple Pass'} (${qty} Ticket${qty > 1 ? 's' : ''})`,
+        image: "assets/jmu-logo-small.webp",
+        order_id: orderData.order_id,
+        prefill: {
+          name: wizardState.data.name || '',
+          contact: wizardState.data.phone || ''
+        },
+        notes: {
+          pass_id: passId,
+          quantity: String(qty),
+          category: wizardState.category
+        },
+        theme: {
+          color: "#8B1E3F"
+        },
+        modal: {
+          ondismiss: function () {
+            showToast('Payment window closed. You can retry or pay via direct UPI.', 'info');
+            if (payBtn) {
+              payBtn.disabled = false;
+              payBtn.innerHTML = originalBtnText;
+            }
+          }
+        },
+        handler: async function (response) {
+          // Received razorpay_payment_id, razorpay_order_id, razorpay_signature
+          if (payBtn) {
+            payBtn.innerHTML = '🔐 Verifying Payment Signature...';
+          }
+          showToast('Verifying payment signature with server...', 'info');
+
+          try {
+            const passData = {
+              passId: passId,
+              category: wizardState.category === 'solo' 
+                ? (wizardState.quantity > 1 ? `Solo Pass (${wizardState.quantity} Tickets)` : 'Solo Pass')
+                : 'Married Couple Pass',
+              quantity: wizardState.category === 'solo' ? (wizardState.quantity || 1) : 1,
+              amount: price,
+              name: wizardState.data.name,
+              phone: wizardState.data.phone,
+              address: wizardState.data.address || '',
+              insta: '',
+              partnerName: wizardState.data.partnerName || null,
+              partnerPhone: wizardState.data.partnerPhone || null,
+              timestamp: Date.now(),
+              dateStr: config.eventDate,
+              timeStr: config.eventTime,
+              venue: config.venue,
+              organizer: config.organizer,
+              checkedIn: false,
+              status: 'approved',
+              paymentMethod: 'razorpay',
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id
+            };
+
+            // 3. Verify signature on backend (/api/verify-payment)
+            const verifyRes = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                passData: passData
+              })
+            });
+
+            const verifyData = await verifyRes.json();
+            if (!verifyData.success) {
+              showToast('⚠️ Payment Verification Failed: ' + (verifyData.error || 'Invalid signature'), 'error');
+              if (payBtn) {
+                payBtn.disabled = false;
+                payBtn.innerHTML = originalBtnText;
+              }
+              return;
+            }
+
+            showToast('✓ Payment Verified! Ticket Confirmed & Approved!', 'success');
+            handlePaymentConfirmed({
+              passId: passId,
+              paymentMethod: 'razorpay',
+              paymentId: response.razorpay_payment_id,
+              orderId: response.razorpay_order_id,
+              status: 'approved'
+            });
+          } catch (vErr) {
+            console.error('Verify error:', vErr);
+            showToast('Verification error: ' + vErr.message, 'error');
+            if (payBtn) {
+              payBtn.disabled = false;
+              payBtn.innerHTML = originalBtnText;
+            }
+          }
+        }
+      };
+
+      const rzp = new Razorpay(options);
+      rzp.on('payment.failed', function (failResp) {
+        console.error('Razorpay payment failed:', failResp.error);
+        const reason = (failResp.error && (failResp.error.description || failResp.error.reason)) || 'Payment was declined or cancelled';
+        showToast('❌ Payment Failed: ' + reason, 'error');
+        if (payBtn) {
+          payBtn.disabled = false;
+          payBtn.innerHTML = originalBtnText;
+        }
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Razorpay init error:', err);
+      showToast('Error starting payment: ' + err.message, 'error');
+      if (payBtn) {
+        payBtn.disabled = false;
+        payBtn.innerHTML = originalBtnText;
+      }
+    }
   };
 
   window.copyUpiId = function () {
@@ -539,7 +657,7 @@
   window.handlePaymentConfirmed = function (paymentMeta = {}) {
     const config = getConfig();
     const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo : config.pricing.couple);
-    const passId = generatePassId();
+    const passId = (paymentMeta && paymentMeta.passId) || generatePassId();
     const isOnlineApproved = paymentMeta && paymentMeta.status === 'approved';
 
     const pass = {
@@ -561,7 +679,10 @@
       venue: config.venue,
       organizer: config.organizer,
       checkedIn: false,
-      status: isOnlineApproved ? 'approved' : 'pending'
+      status: isOnlineApproved ? 'approved' : 'pending',
+      paymentMethod: (paymentMeta && paymentMeta.paymentMethod) || 'upi',
+      razorpayOrderId: (paymentMeta && paymentMeta.orderId) || null,
+      razorpayPaymentId: (paymentMeta && paymentMeta.paymentId) || null
     };
 
     wizardState.currentPass = pass;
@@ -638,6 +759,31 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     const sendWaBtn = document.getElementById('btn-send-whatsapp-screenshot');
     if (sendWaBtn) {
       sendWaBtn.href = waUrl;
+    }
+
+    // Update status plaque & instruction card for approved vs pending
+    const plaqueSub = document.querySelector('.plaque-sub');
+    if (plaqueSub) {
+      if (pass.status === 'approved') {
+        plaqueSub.textContent = '✓ Approved Entry Pass';
+        plaqueSub.style.color = '#10b981';
+      } else {
+        plaqueSub.textContent = '⏳ Pending Verification';
+        plaqueSub.style.color = '#fbbf24';
+      }
+    }
+
+    const waInstructionCard = document.querySelector('.wa-instruction-card');
+    if (waInstructionCard) {
+      if (pass.status === 'approved') {
+        waInstructionCard.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        waInstructionCard.style.background = 'rgba(16, 185, 129, 0.1)';
+        waInstructionCard.innerHTML = `<strong class="instruction-title" style="color:#10b981;">✓ Online Payment Verified &amp; Approved!</strong> Aapka Razorpay payment verify ho chuka hai aur Entry Pass gate ke liye direct approved hai. Neeche diye button se apna Pass download kar lein!`;
+      } else {
+        waInstructionCard.style.borderColor = '';
+        waInstructionCard.style.background = '';
+        waInstructionCard.innerHTML = `<strong class="instruction-title">⚠️ Important: Verification Step</strong> Neeche diye button par click karein. WhatsApp par pre-filled details ke sath apna <strong class="highlight-text">Payment Screenshot</strong> attach karke send karein taaki gate par Pass confirm ho sake!`;
+      }
     }
   }
 

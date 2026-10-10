@@ -41,7 +41,10 @@ module.exports = async function handler(req, res) {
         organizer,
         checked_in as "checkedIn",
         COALESCE(status, 'pending') as "status",
-        COALESCE(quantity, 1) as "quantity"
+        COALESCE(quantity, 1) as "quantity",
+        COALESCE(payment_method, 'upi') as "paymentMethod",
+        razorpay_order_id as "razorpayOrderId",
+        razorpay_payment_id as "razorpayPaymentId"
       FROM jmu_passes 
       WHERE UPPER(pass_id) = ${cleanId}
       LIMIT 1;

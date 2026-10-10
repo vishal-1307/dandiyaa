@@ -34,7 +34,8 @@ module.exports = async function handler(req, res) {
       INSERT INTO jmu_passes (
         pass_id, category, amount, name, phone, address, insta,
         partner_name, partner_phone, timestamp, date_str, time_str,
-        venue, organizer, checked_in, status, quantity
+        venue, organizer, checked_in, status, quantity,
+        payment_method, razorpay_order_id, razorpay_payment_id
       ) VALUES (
         ${pass.passId.trim().toUpperCase()},
         ${pass.category || 'Solo Pass'},
@@ -52,12 +53,18 @@ module.exports = async function handler(req, res) {
         ${pass.organizer || 'Motion Arts Academy'},
         ${Boolean(pass.checkedIn)},
         ${pass.status || 'pending'},
-        ${Number(pass.quantity) || 1}
+        ${Number(pass.quantity) || 1},
+        ${pass.paymentMethod || 'upi'},
+        ${pass.razorpayOrderId || null},
+        ${pass.razorpayPaymentId || null}
       )
       ON CONFLICT (pass_id) DO UPDATE SET
         quantity = EXCLUDED.quantity,
         checked_in = EXCLUDED.checked_in,
-        status = COALESCE(jmu_passes.status, EXCLUDED.status);
+        status = COALESCE(jmu_passes.status, EXCLUDED.status),
+        payment_method = COALESCE(EXCLUDED.payment_method, jmu_passes.payment_method),
+        razorpay_order_id = COALESCE(EXCLUDED.razorpay_order_id, jmu_passes.razorpay_order_id),
+        razorpay_payment_id = COALESCE(EXCLUDED.razorpay_payment_id, jmu_passes.razorpay_payment_id);
     `;
 
     return res.status(200).json({ success: true, passId: pass.passId.trim().toUpperCase() });
