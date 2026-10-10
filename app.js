@@ -179,6 +179,18 @@
     }
   }
 
+  function deleteLocalRegistration(passId) {
+    try {
+      const all = getRegistrations().filter(item => item.passId !== passId);
+      localStorage.setItem('jmu_registrations_v1', JSON.stringify(all));
+
+      const myPasses = getMyPasses().filter(item => item.passId !== passId);
+      localStorage.setItem('jmu_my_passes', JSON.stringify(myPasses));
+    } catch (e) {
+      console.error('Error deleting local registration:', e);
+    }
+  }
+
   // Cloud sync to Neon Postgres database
   async function syncPassToCloud(pass) {
     if (!pass || !pass.passId) return false;
@@ -735,11 +747,23 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       partnerHtml = `<div class="lookup-field"><span>Partner:</span> <strong>${escapeHtml(pass.partnerName)}</strong></div>`;
     }
 
+    const isApproved = pass.status === 'approved';
+    const statusBadge = isApproved
+      ? `<span class="badge badge-success" style="font-size:12px; padding:4px 8px;">✓ Payment Verified &amp; Approved</span>`
+      : `<span class="badge badge-warning" style="font-size:12px; padding:4px 8px;">⏳ Verification Pending (Screenshot Required)</span>`;
+
+    const gateBadge = pass.checkedIn
+      ? `<span class="status-pill checked-in" style="margin-left:6px;">🚪 Admitted at Gate</span>`
+      : '';
+
     resultContainer.innerHTML = `
       <div class="lookup-pass-card">
         <div class="lookup-pass-header">
           <div class="pass-badge">PASS ID: ${escapeHtml(pass.passId)}</div>
-          <span class="status-pill ${pass.checkedIn ? 'checked-in' : 'confirmed'}">${pass.checkedIn ? '✓ Verified at Gate' : 'Confirmed Booking'}</span>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            ${statusBadge}
+            ${gateBadge}
+          </div>
         </div>
         <div class="lookup-body">
           <div class="lookup-field"><span>Attendee:</span> <strong>${escapeHtml(pass.name)}</strong></div>
@@ -748,7 +772,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
           <div class="lookup-field"><span>Address:</span> <strong>${escapeHtml(pass.address)}</strong></div>
           ${pass.insta && pass.insta.trim() !== '' && pass.insta !== 'N/A' ? `<div class="lookup-field"><span>Instagram:</span> <strong>${escapeHtml(pass.insta)}</strong></div>` : ''}
           ${partnerHtml}
-          <div class="lookup-field"><span>Event Date:</span> <strong>19 Oct 2026 • 6–10 PM</strong></div>
+          <div class="lookup-field"><span>Event Date:</span> <strong>19 October 2026 • 6:00–10:00 PM</strong></div>
           <div class="lookup-field"><span>Venue:</span> <strong>Marwadi Vivah Bhavan, Jaynagar</strong></div>
         </div>
         <div class="lookup-actions">
@@ -777,6 +801,8 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
   // --- Organizer Operations & Gate Check-in Portal ---
   let adminLockUntil = 0;
   let adminFailedAttempts = 0;
+  let adminPassesCache = [];
+  let activeAdminFilter = 'all';
 
   window.openAdminModal = function () {
     const modal = document.getElementById('admin-modal');
@@ -822,7 +848,19 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     if (loginSection) loginSection.style.display = 'none';
     if (dashSection) dashSection.style.display = 'block';
 
+    // Populate Settings tab values
+    const config = getConfig();
+    const cfgUpiInput = document.getElementById('cfg-upi-id');
+    const cfgPayeeInput = document.getElementById('cfg-payee-name');
+    const cfgPhoneInput = document.getElementById('cfg-phone');
+    if (cfgUpiInput) cfgUpiInput.value = config.upiId;
+    if (cfgPayeeInput) cfgPayeeInput.value = config.payeeName;
+    if (cfgPhoneInput) cfgPhoneInput.value = config.whatsappNumber;
+
+    // Render local cache first for instant feedback, then fetch latest from cloud
+    adminPassesCache = getRegistrations();
     renderAdminData();
+    fetchCloudPassesForAdmin(false);
   }
 
   window.handleAdminLogin = function (e) {
@@ -859,47 +897,117 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     }
   };
 
-  function renderAdminData() {
-    const registrations = getRegistrations();
+  async function fetchCloudPassesForAdmin(isManual = false) {
     const config = getConfig();
+    try {
+      const response = await fetch('/api/all-passes', {
+        headers: {
+          'x-admin-pin': config.adminPin
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.success && Array.isArray(data.passes)) {
+          adminPassesCache = data.passes;
+          // Synchronize locally so offline fallback has latest cloud data
+          localStorage.setItem('jmu_registrations_v1', JSON.stringify(data.passes));
+          renderAdminData();
+          if (isManual) {
+            showToast(`✓ Cloud database synced (${data.passes.length} attendees)`, 'success');
+          }
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch passes from cloud database:', err);
+    }
+    if (isManual) {
+      showToast('Offline or network error: using local records', 'info');
+    }
+  }
 
-    // Calculate metrics
+  window.refreshAdminDataFromCloud = function () {
+    fetchCloudPassesForAdmin(true);
+  };
+
+  window.setAdminFilter = function (filter) {
+    activeAdminFilter = filter || 'all';
+    document.querySelectorAll('.admin-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-filter') === activeAdminFilter);
+    });
+    renderAdminData();
+  };
+
+  function renderAdminData() {
+    const all = (adminPassesCache && adminPassesCache.length > 0) ? adminPassesCache : getRegistrations();
+
+    // Calculate metrics across ALL registered passes
     let totalRevenue = 0;
-    let soloCount = 0;
-    let coupleCount = 0;
+    let approvedCount = 0;
+    let pendingCount = 0;
     let checkedInCount = 0;
 
-    registrations.forEach(r => {
+    all.forEach(r => {
       totalRevenue += Number(r.amount) || 0;
-      if (r.category && r.category.toLowerCase().includes('couple')) {
-        coupleCount++;
+      if (r.status === 'approved') {
+        approvedCount++;
       } else {
-        soloCount++;
+        pendingCount++;
       }
       if (r.checkedIn) checkedInCount++;
     });
 
     const statTotalEl = document.getElementById('admin-stat-total');
     const statRevEl = document.getElementById('admin-stat-rev');
-    const statSoloEl = document.getElementById('admin-stat-solo');
-    const statCoupleEl = document.getElementById('admin-stat-couple');
+    const statApprovedEl = document.getElementById('admin-stat-approved');
+    const statPendingEl = document.getElementById('admin-stat-pending');
     const statCheckedEl = document.getElementById('admin-stat-checked');
 
-    if (statTotalEl) statTotalEl.textContent = registrations.length;
+    if (statTotalEl) statTotalEl.textContent = all.length;
     if (statRevEl) statRevEl.textContent = `₹${totalRevenue.toLocaleString('en-IN')}`;
-    if (statSoloEl) statSoloEl.textContent = soloCount;
-    if (statCoupleEl) statCoupleEl.textContent = coupleCount;
+    if (statApprovedEl) statApprovedEl.textContent = approvedCount;
+    if (statPendingEl) statPendingEl.textContent = pendingCount;
     if (statCheckedEl) statCheckedEl.textContent = checkedInCount;
 
-    // Render Config tab values
-    const cfgUpiInput = document.getElementById('cfg-upi-id');
-    const cfgPayeeInput = document.getElementById('cfg-payee-name');
-    const cfgPhoneInput = document.getElementById('cfg-phone');
-    if (cfgUpiInput) cfgUpiInput.value = config.upiId;
-    if (cfgPayeeInput) cfgPayeeInput.value = config.payeeName;
-    if (cfgPhoneInput) cfgPhoneInput.value = config.whatsappNumber;
+    // Update filter tab counts
+    const fAll = document.getElementById('filter-count-all');
+    const fPending = document.getElementById('filter-count-pending');
+    const fApproved = document.getElementById('filter-count-approved');
+    const fChecked = document.getElementById('filter-count-checked');
+    if (fAll) fAll.textContent = all.length;
+    if (fPending) fPending.textContent = pendingCount;
+    if (fApproved) fApproved.textContent = approvedCount;
+    if (fChecked) fChecked.textContent = checkedInCount;
 
-    renderRegistrationsTable(registrations);
+    // Apply active filter
+    let list = all;
+    if (activeAdminFilter === 'pending') {
+      list = all.filter(r => r.status !== 'approved');
+    } else if (activeAdminFilter === 'approved') {
+      list = all.filter(r => r.status === 'approved');
+    } else if (activeAdminFilter === 'checkedin') {
+      list = all.filter(r => r.checkedIn);
+    }
+
+    // Apply live search query if present
+    const searchInput = document.getElementById('admin-search-input');
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    if (query) {
+      list = list.filter(r => 
+        (r.passId && r.passId.toLowerCase().includes(query)) ||
+        (r.name && r.name.toLowerCase().includes(query)) ||
+        (r.phone && r.phone.includes(query)) ||
+        (r.address && r.address.toLowerCase().includes(query)) ||
+        (r.partnerName && r.partnerName.toLowerCase().includes(query))
+      );
+    }
+
+    const showingCountEl = document.getElementById('admin-showing-count');
+    if (showingCountEl) {
+      showingCountEl.textContent = `Showing ${list.length} of ${all.length} attendees`;
+    }
+
+    renderRegistrationsTable(list);
   }
 
   function renderRegistrationsTable(list) {
@@ -907,59 +1015,183 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     if (!tbody) return;
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--muted);">No registrations yet. Share the link with attendees!</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:28px 16px; color:var(--muted);">No attendees match this filter or search query.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = list.map((item, idx) => `
-      <tr>
-        <td><strong>${escapeHtml(item.passId)}</strong></td>
-        <td>${escapeHtml(item.name)}</td>
-        <td><span class="badge ${item.category && item.category.includes('Couple') ? 'badge-gold' : 'badge-wine'}">${escapeHtml(item.category)}</span></td>
-        <td><a href="tel:${escapeHtml(item.phone)}">${escapeHtml(item.phone)}</a></td>
-        <td>${escapeHtml(item.address || '-')}</td>
-        <td>
-          <span class="status-pill ${item.checkedIn ? 'checked-in' : 'pending'}">
-            ${item.checkedIn ? '✓ Admitted' : 'Pending'}
-          </span>
-        </td>
-        <td>
-          <button class="button small" style="padding:4px 10px; font-size:12px; min-height:30px;" onclick="toggleCheckIn('${escapeHtml(item.passId)}')">
-            ${item.checkedIn ? 'Undo Entry' : 'Check In'}
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = list.map((item) => {
+      const isApproved = item.status === 'approved';
+      const cleanPhone = String(item.phone || '').replace(/[^0-9]/g, '');
+      const waMsg = encodeURIComponent(`Namaste ${item.name}, Jaynagar Milan Utsav 2026 ke ticket (Pass ID: ${item.passId}) payment verification ke sambandh mein:`);
+      
+      return `
+        <tr>
+          <td>
+            <strong style="font-family:var(--font-mono); color:var(--gold); font-size:13.5px;">${escapeHtml(item.passId)}</strong>
+          </td>
+          <td>
+            <strong style="color:#fff;">${escapeHtml(item.name)}</strong>
+            ${item.partnerName ? `<div style="font-size:12px; color:var(--gold); margin-top:2px;">+ ${escapeHtml(item.partnerName)}</div>` : ''}
+            <div style="font-size:11px; color:var(--muted); margin-top:2px;">${escapeHtml(item.address || '-')}</div>
+          </td>
+          <td>
+            <span class="badge ${item.category && item.category.includes('Couple') ? 'badge-gold' : 'badge-wine'}">${escapeHtml(item.category || 'Solo')}</span>
+            <div style="font-size:12px; font-weight:600; color:var(--gold); margin-top:3px;">₹${escapeHtml(item.amount || '199')}</div>
+          </td>
+          <td>
+            <a href="tel:${escapeHtml(item.phone)}" style="font-weight:600; color:var(--snow); text-decoration:none;">${escapeHtml(item.phone)}</a>
+            ${cleanPhone ? `
+              <div>
+                <a href="https://wa.me/91${cleanPhone}?text=${waMsg}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:4px; font-size:11px; color:#25D366; text-decoration:none; margin-top:3px;">
+                  💬 WhatsApp
+                </a>
+              </div>
+            ` : ''}
+          </td>
+          <td>
+            ${isApproved
+              ? `<span class="badge badge-success">✓ Approved</span>`
+              : `<span class="badge badge-warning">⏳ Pending</span>`}
+          </td>
+          <td>
+            <span class="status-pill ${item.checkedIn ? 'checked-in' : 'pending'}">
+              ${item.checkedIn ? '🚪 Admitted' : 'Pending'}
+            </span>
+            ${item.checkedIn && item.checkInTime ? `<div style="font-size:10px; color:var(--muted); margin-top:2px;">${escapeHtml(item.checkInTime)}</div>` : ''}
+          </td>
+          <td>
+            <div class="admin-actions-cell">
+              ${isApproved
+                ? `<button type="button" class="button outline small" style="padding:4px 8px; font-size:11px; min-height:28px;" onclick="adminMarkPendingPass('${escapeHtml(item.passId)}')">Undo Appr</button>`
+                : `<button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:#10b981; border-color:#10b981; color:#fff;" onclick="adminApprovePass('${escapeHtml(item.passId)}')">✓ Approve</button>`
+              }
+              <button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:var(--ink-2);" onclick="toggleCheckIn('${escapeHtml(item.passId)}')">
+                ${item.checkedIn ? 'Undo Entry' : '🚪 Admit'}
+              </button>
+              <button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:#ef4444; border-color:#ef4444; color:#fff;" onclick="adminDeletePass('${escapeHtml(item.passId)}', '${escapeHtml(item.name)}')">
+                🗑️ Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 
   window.handleAdminSearch = function () {
-    const query = document.getElementById('admin-search-input').value.trim().toLowerCase();
-    const all = getRegistrations();
-    if (!query) {
-      renderRegistrationsTable(all);
-      return;
+    renderAdminData();
+  };
+
+  // Admin Approve Action
+  window.adminApprovePass = async function (passId) {
+    const config = getConfig();
+    const item = adminPassesCache.find(r => r.passId === passId) || getRegistrations().find(r => r.passId === passId);
+    if (item) {
+      item.status = 'approved';
+      saveRegistration(item);
     }
-    const filtered = all.filter(r => 
-      (r.passId && r.passId.toLowerCase().includes(query)) ||
-      (r.name && r.name.toLowerCase().includes(query)) ||
-      (r.phone && r.phone.includes(query)) ||
-      (r.address && r.address.toLowerCase().includes(query)) ||
-      (r.partnerName && r.partnerName.toLowerCase().includes(query))
-    );
-    renderRegistrationsTable(filtered);
+    renderAdminData();
+    showToast(`✓ Pass ${passId} Approved & Verified!`, 'success');
+
+    try {
+      await fetch('/api/all-passes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': config.adminPin
+        },
+        body: JSON.stringify({ action: 'approve', passId })
+      });
+    } catch (err) {
+      console.warn('Cloud approve error (saved locally):', err);
+    }
+  };
+
+  // Admin Revert to Pending Action
+  window.adminMarkPendingPass = async function (passId) {
+    const config = getConfig();
+    const item = adminPassesCache.find(r => r.passId === passId) || getRegistrations().find(r => r.passId === passId);
+    if (item) {
+      item.status = 'pending';
+      saveRegistration(item);
+    }
+    renderAdminData();
+    showToast(`Pass ${passId} reverted to Pending`, 'info');
+
+    try {
+      await fetch('/api/all-passes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': config.adminPin
+        },
+        body: JSON.stringify({ action: 'pending', passId })
+      });
+    } catch (err) {
+      console.warn('Cloud pending status update error (saved locally):', err);
+    }
+  };
+
+  // Admin Delete Pass Action
+  window.adminDeletePass = async function (passId, attendeeName) {
+    const config = getConfig();
+    const confirmed = confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE attendee "${attendeeName || passId}" (${passId})?\n\nThis will remove them from the database roster and they will no longer be able to retrieve this pass.`);
+    if (!confirmed) return;
+
+    // Optimistic removal from cache & local storage
+    adminPassesCache = adminPassesCache.filter(r => r.passId !== passId);
+    deleteLocalRegistration(passId);
+    renderAdminData();
+    showToast(`🗑️ Attendee ${passId} removed`, 'success');
+
+    try {
+      const res = await fetch('/api/all-passes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': config.adminPin
+        },
+        body: JSON.stringify({ action: 'delete', passId })
+      });
+      if (res.ok) {
+        showToast(`✓ Pass ${passId} deleted permanently from cloud database`, 'success');
+      }
+    } catch (err) {
+      console.warn('Cloud delete error:', err);
+    }
   };
 
   // Gate Check-in verification terminal
-  window.handleGateTerminalSubmit = function (e) {
+  window.handleGateTerminalSubmit = async function (e) {
     if (e) e.preventDefault();
     const input = document.getElementById('gate-pass-input');
     const query = input ? input.value.trim().toUpperCase() : '';
     const feedbackEl = document.getElementById('gate-terminal-feedback');
+    const config = getConfig();
 
     if (!query) return;
 
-    const all = getRegistrations();
-    const match = all.find(r => (r.passId && r.passId.toUpperCase() === query) || r.phone === query);
+    let match = adminPassesCache.find(r => (r.passId && r.passId.toUpperCase() === query) || r.phone === query);
+    if (!match) {
+      match = getRegistrations().find(r => (r.passId && r.passId.toUpperCase() === query) || r.phone === query);
+    }
+
+    // If not found in memory, query cloud endpoint directly
+    if (!match) {
+      try {
+        const resp = await fetch('/api/get-pass?id=' + encodeURIComponent(query));
+        if (resp.ok) {
+          const cData = await resp.json();
+          if (cData && cData.success && cData.pass) {
+            match = cData.pass;
+            adminPassesCache.unshift(match);
+            saveRegistration(match);
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
 
     if (!match) {
       if (feedbackEl) {
@@ -986,22 +1218,55 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       }
       showToast('✓ Entry verified: ' + match.passId, 'success');
       if (input) input.value = '';
+
+      try {
+        await fetch('/api/all-passes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-pin': config.adminPin
+          },
+          body: JSON.stringify({ action: 'checkin', passId: match.passId, checkedIn: true })
+        });
+      } catch (err) {
+        // ignore
+      }
     }
   };
 
-  window.toggleCheckIn = function (passId) {
-    const all = getRegistrations();
-    const item = all.find(r => r.passId === passId);
+  window.toggleCheckIn = async function (passId) {
+    const config = getConfig();
+    let item = adminPassesCache.find(r => r.passId === passId);
+    if (!item) item = getRegistrations().find(r => r.passId === passId);
     if (!item) return;
+
     item.checkedIn = !item.checkedIn;
+    if (item.checkedIn) {
+      item.checkInTime = new Date().toLocaleTimeString('en-IN');
+    } else {
+      item.checkInTime = null;
+    }
     saveRegistration(item);
     renderAdminData();
-    showToast(`Pass ${passId} marked as ${item.checkedIn ? 'Admitted' : 'Pending'}`);
+    showToast(`Pass ${passId} marked as ${item.checkedIn ? 'Admitted' : 'Pending Entry'}`);
+
+    try {
+      await fetch('/api/all-passes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': config.adminPin
+        },
+        body: JSON.stringify({ action: 'checkin', passId, checkedIn: item.checkedIn })
+      });
+    } catch (err) {
+      console.warn('Cloud checkin sync error:', err);
+    }
   };
 
   // 1-Click CSV Export for Organizer
   window.exportRegistrationsCSV = function () {
-    const all = getRegistrations();
+    const all = (adminPassesCache && adminPassesCache.length > 0) ? adminPassesCache : getRegistrations();
     if (all.length === 0) {
       showToast('No registrations to export yet', 'error');
       return;
@@ -1015,9 +1280,25 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       return `"${str.replace(/"/g, '""')}"`;
     }
 
-    const headers = ["Pass ID", "Category", "Amount", "Attendee Name", "Mobile", "Address", "Instagram", "Partner Name", "Partner Mobile", "Booking Date", "Gate Check-In"];
+    const headers = [
+      "Pass ID",
+      "Status",
+      "Category",
+      "Amount",
+      "Attendee Name",
+      "Mobile",
+      "Address",
+      "Instagram",
+      "Partner Name",
+      "Partner Mobile",
+      "Booking Date",
+      "Gate Check-In",
+      "Check-In Time"
+    ];
+
     const rows = all.map(item => [
       safeCsvCell(item.passId),
+      safeCsvCell(item.status === 'approved' ? 'Approved' : 'Pending'),
       safeCsvCell(item.category),
       safeCsvCell(item.amount),
       safeCsvCell(item.name),
@@ -1026,8 +1307,9 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       safeCsvCell(item.insta),
       safeCsvCell(item.partnerName),
       safeCsvCell(item.partnerPhone),
-      safeCsvCell(new Date(item.timestamp).toLocaleString('en-IN')),
-      safeCsvCell(item.checkedIn ? 'YES' : 'NO')
+      safeCsvCell(item.timestamp ? new Date(item.timestamp).toLocaleString('en-IN') : ''),
+      safeCsvCell(item.checkedIn ? 'YES' : 'NO'),
+      safeCsvCell(item.checkInTime || '')
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.map(safeCsvCell).join(','), ...rows.map(e => e.join(','))].join('\n');

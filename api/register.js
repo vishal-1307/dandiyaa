@@ -34,7 +34,7 @@ module.exports = async function handler(req, res) {
       INSERT INTO jmu_passes (
         pass_id, category, amount, name, phone, address, insta,
         partner_name, partner_phone, timestamp, date_str, time_str,
-        venue, organizer, checked_in
+        venue, organizer, checked_in, status
       ) VALUES (
         ${pass.passId.trim().toUpperCase()},
         ${pass.category || 'Solo Pass'},
@@ -50,10 +50,12 @@ module.exports = async function handler(req, res) {
         ${pass.timeStr || '6:00–10:00 PM'},
         ${pass.venue || 'Marwadi Vivah Bhavan, Jaynagar'},
         ${pass.organizer || 'Motion Arts Academy'},
-        ${Boolean(pass.checkedIn)}
+        ${Boolean(pass.checkedIn)},
+        ${pass.status || 'pending'}
       )
       ON CONFLICT (pass_id) DO UPDATE SET
-        checked_in = EXCLUDED.checked_in;
+        checked_in = EXCLUDED.checked_in,
+        status = COALESCE(jmu_passes.status, EXCLUDED.status);
     `;
 
     return res.status(200).json({ success: true, passId: pass.passId.trim().toUpperCase() });

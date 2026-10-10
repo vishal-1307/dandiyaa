@@ -34,8 +34,12 @@ async function ensureTable() {
       venue TEXT,
       organizer VARCHAR(128),
       checked_in BOOLEAN DEFAULT FALSE,
+      status VARCHAR(32) DEFAULT 'pending',
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
+  `;
+  await db`
+    ALTER TABLE jmu_passes ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'pending';
   `;
   await db`
     CREATE INDEX IF NOT EXISTS idx_jmu_passes_pass_id ON jmu_passes(pass_id);

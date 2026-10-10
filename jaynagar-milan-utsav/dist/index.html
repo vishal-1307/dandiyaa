@@ -718,7 +718,7 @@
 
       <!-- Centered Developer Attribution (Middle bottom part) -->
       <div class="footer-bottom-credit">
-        <p>Developed with ❤️ by <a href="https://vishalthakur.tech" target="_blank" rel="noopener noreferrer">Vishal</a></p>
+        <p>Developed with ❤️ by <a href="https://vishalthakur.tech" target="_blank" rel="noopener noreferrer">Vishal</a> • <a href="#admin" onclick="openAdminModal(); return false;" style="color:var(--muted); opacity:0.75; font-size:12px; margin-left:4px;">🔐 Organizer Portal</a></p>
       </div>
     </div>
   </footer>
@@ -1027,6 +1027,18 @@
 
         <!-- Dashboard View -->
         <div id="admin-dashboard-view" style="display:none;">
+          <!-- Live Header Bar with Refresh & Cloud Indicator -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#10b981; box-shadow:0 0 10px #10b981;"></span>
+              <strong style="color:var(--gold); font-size:14px;">Live Cloud Database Roster (Neon Postgres)</strong>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="button dark small" onclick="refreshAdminDataFromCloud()">🔄 Refresh Cloud</button>
+              <button type="button" class="button outline small" onclick="exportRegistrationsCSV()">📥 Export Excel CSV</button>
+            </div>
+          </div>
+
           <!-- Metrics -->
           <div class="admin-stats-grid">
             <div class="admin-stat-card">
@@ -1034,39 +1046,49 @@
               <strong id="admin-stat-total">0</strong>
             </div>
             <div class="admin-stat-card">
-              <span>Revenue</span>
+              <span>Total Revenue</span>
               <strong id="admin-stat-rev">₹0</strong>
             </div>
             <div class="admin-stat-card">
-              <span>Solo Passes</span>
-              <strong id="admin-stat-solo">0</strong>
+              <span>Approved (Paid)</span>
+              <strong id="admin-stat-approved" style="color:#10b981;">0</strong>
             </div>
             <div class="admin-stat-card">
-              <span>Couple Passes</span>
-              <strong id="admin-stat-couple">0</strong>
+              <span>Pending Approval</span>
+              <strong id="admin-stat-pending" style="color:#f59e0b;">0</strong>
             </div>
             <div class="admin-stat-card">
               <span>Gate Admitted</span>
-              <strong id="admin-stat-checked" style="color:#10b981;">0</strong>
+              <strong id="admin-stat-checked" style="color:#38bdf8;">0</strong>
             </div>
           </div>
 
-          <!-- Gate Terminal Check-in -->
+          <!-- Gate Terminal Check-in Scanner -->
           <div class="gate-terminal-box">
             <h4>Gate Entry Check-In Scanner</h4>
             <form onsubmit="handleGateTerminalSubmit(event)" style="display:flex; gap:10px;">
-              <input type="text" id="gate-pass-input" class="form-control" placeholder="Enter or Scan Pass ID (e.g. JMU-7K29)" autocomplete="off">
+              <input type="text" id="gate-pass-input" class="form-control" placeholder="Enter or Scan Pass ID (e.g. JMU-9X7CX)" autocomplete="off">
               <button type="submit" class="button small">Verify &amp; Admit</button>
             </form>
             <div id="gate-terminal-feedback"></div>
           </div>
 
-          <!-- Directory & Search -->
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:20px; flex-wrap:wrap;">
-            <input type="text" id="admin-search-input" class="form-control" style="max-width:300px;" placeholder="Search name, phone, pass..." oninput="handleAdminSearch()">
-            <button class="button dark small" onclick="exportRegistrationsCSV()">📥 1-Click Export CSV (Excel)</button>
+          <!-- Filter & Search Controls -->
+          <div style="margin-top:20px;">
+            <div class="admin-filter-bar">
+              <button type="button" class="admin-filter-btn active" data-filter="all" onclick="setAdminFilter('all')">All (<span id="filter-count-all">0</span>)</button>
+              <button type="button" class="admin-filter-btn" data-filter="pending" onclick="setAdminFilter('pending')">⏳ Pending (<span id="filter-count-pending">0</span>)</button>
+              <button type="button" class="admin-filter-btn" data-filter="approved" onclick="setAdminFilter('approved')">✅ Approved (<span id="filter-count-approved">0</span>)</button>
+              <button type="button" class="admin-filter-btn" data-filter="checkedin" onclick="setAdminFilter('checkedin')">🚪 Gate Admitted (<span id="filter-count-checked">0</span>)</button>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:14px; flex-wrap:wrap;">
+              <input type="text" id="admin-search-input" class="form-control" style="max-width:340px;" placeholder="Search name, phone, pass ID..." oninput="handleAdminSearch()">
+              <span style="font-size:12.5px; color:var(--muted);" id="admin-showing-count">Showing all registrations</span>
+            </div>
           </div>
 
+          <!-- Attendees Table -->
           <div class="admin-table-wrap">
             <table class="admin-table">
               <thead>
@@ -1075,9 +1097,9 @@
                   <th>Attendee</th>
                   <th>Category</th>
                   <th>Mobile</th>
-                  <th>Address</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th>Payment Status</th>
+                  <th>Gate Entry</th>
+                  <th style="min-width:230px;">Actions (Approve / Remove / Admit)</th>
                 </tr>
               </thead>
               <tbody id="admin-registrations-tbody">

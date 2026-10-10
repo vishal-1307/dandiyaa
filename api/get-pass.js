@@ -39,7 +39,8 @@ module.exports = async function handler(req, res) {
         time_str as "timeStr",
         venue,
         organizer,
-        checked_in as "checkedIn"
+        checked_in as "checkedIn",
+        COALESCE(status, 'pending') as "status"
       FROM jmu_passes 
       WHERE UPPER(pass_id) = ${cleanId}
       LIMIT 1;
