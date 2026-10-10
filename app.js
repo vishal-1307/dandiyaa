@@ -179,6 +179,50 @@
     }
   }
 
+  // Cloud sync to Neon Postgres database
+  async function syncPassToCloud(pass) {
+    if (!pass || !pass.passId) return false;
+    try {
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pass)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.success) {
+          pass.synced = true;
+          // Cache updated synced status in local storage
+          const all = getRegistrations();
+          const found = all.find(p => p.passId === pass.passId);
+          if (found) {
+            found.synced = true;
+            localStorage.setItem('jmu_registrations_v1', JSON.stringify(all));
+          }
+          console.log('✓ Pass stored in cloud database:', pass.passId);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not sync pass to cloud immediately (stored locally):', err);
+    }
+    return false;
+  }
+
+  async function syncLocalRegistrationsToCloud() {
+    try {
+      const local = getRegistrations();
+      if (!local || local.length === 0) return;
+      for (const pass of local) {
+        if (!pass.synced) {
+          syncPassToCloud(pass);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
   function generatePassId() {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     const timeSlice = (Date.now() % (chars.length * chars.length));
@@ -421,6 +465,7 @@
 
     wizardState.currentPass = pass;
     saveRegistration(pass);
+    syncPassToCloud(pass); // Save immediately to Neon Postgres cloud database
 
     renderStep3Pass(pass);
     setWizardStep(3);
@@ -590,7 +635,7 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
     }
   };
 
-  window.handleMyPassSearch = function (e) {
+  window.handleMyPassSearch = async function (e) {
     if (e) e.preventDefault();
     const input = document.getElementById('mypass-search-input');
     const query = input ? input.value.trim().toUpperCase() : '';
@@ -615,27 +660,66 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
       return;
     }
 
+    const resultContainer = document.getElementById('mypass-results');
+
+    // 1. Check local device storage first
     const all = getRegistrations();
     const mySaved = getMyPasses();
     const combined = [...mySaved, ...all];
-
     const match = combined.find(item => item.passId && item.passId.toUpperCase() === query);
 
-    const resultContainer = document.getElementById('mypass-results');
     if (match) {
       renderLookupResult(match);
       showToast('✓ Pass found: ' + match.passId, 'success');
-    } else {
-      if (resultContainer) {
-        resultContainer.innerHTML = `
-          <div class="not-found-card">
-            <h4>Ticket ID Nahi Mila</h4>
-            <p>"${escapeHtml(query)}" ke liye koi registered pass nahi mila. Kripya apna valid Ticket ID check karein ya naya registration karein.</p>
-            <div style="margin-top:16px;">
-              <button class="button small" onclick="closeMyPassModal(); openRegistrationModal();">Book New Pass</button>
-            </div>
-          </div>`;
+      // Background refresh from cloud for latest gate checkin status
+      fetch('/api/get-pass?id=' + encodeURIComponent(query))
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && data.pass) {
+            saveRegistration(data.pass);
+            renderLookupResult(data.pass);
+          }
+        }).catch(() => {});
+      return;
+    }
+
+    // 2. Not in local storage? Search cloud database via /api/get-pass
+    if (resultContainer) {
+      resultContainer.innerHTML = `
+        <div style="text-align:center; padding:32px 16px; color:var(--gold);">
+          <div style="display:inline-block; width:28px; height:28px; border:3px solid rgba(230,188,112,0.3); border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:12px;"></div>
+          <div style="font-size:14.5px; font-weight:600;">Searching cloud database for ${escapeHtml(query)}...</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:4px;">Official database records check kiye jaa rahe hain</div>
+        </div>`;
+    }
+
+    try {
+      const response = await fetch('/api/get-pass?id=' + encodeURIComponent(query));
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.success && data.pass) {
+          const pass = data.pass;
+          // Save to local device so future lookups are instant
+          saveRegistration(pass);
+          renderLookupResult(pass);
+          showToast('✓ Pass retrieved from cloud: ' + pass.passId, 'success');
+          return;
+        }
       }
+    } catch (err) {
+      console.warn('Cloud pass lookup error:', err);
+    }
+
+    // 3. Not found in local storage OR cloud database
+    if (resultContainer) {
+      resultContainer.innerHTML = `
+        <div class="not-found-card">
+          <h4>Ticket ID Nahi Mila</h4>
+          <p>"${escapeHtml(query)}" ke liye koi registered pass nahi mila. Kripya apna valid Ticket ID check karein ya naya registration karein.</p>
+          <div style="margin-top:16px;">
+            <button class="button small" onclick="closeMyPassModal(); openRegistrationModal();">Book New Pass</button>
+          </div>
+        </div>`;
     }
   };
 
@@ -677,7 +761,10 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
 
   window.viewFullPassFromLookup = function (passId) {
     const all = [...getMyPasses(), ...getRegistrations()];
-    const pass = all.find(p => p.passId === passId);
+    let pass = all.find(p => p.passId === passId);
+    if (!pass && wizardState.currentPass && wizardState.currentPass.passId === passId) {
+      pass = wizardState.currentPass;
+    }
     if (!pass) return;
 
     closeMyPassModal();
@@ -978,6 +1065,9 @@ Kripya mera payment screenshot neeche check karein aur mera Pass verify/confirm 
   // --- Initialize on DOMContentLoaded ---
   document.addEventListener('DOMContentLoaded', function () {
     initCountdown();
+
+    // Sync any unsynced offline/local registrations to the cloud database
+    syncLocalRegistrationsToCloud();
 
     // Check URL hash for admin direct link (e.g. #admin)
     if (window.location.hash === '#admin') {
