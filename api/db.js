@@ -93,6 +93,8 @@ async function ensureTable() {
   await db`ALTER TABLE jmu_passes ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(64);`;
   await db`ALTER TABLE jmu_passes ADD COLUMN IF NOT EXISTS razorpay_payment_id VARCHAR(64);`;
   await db`ALTER TABLE jmu_passes ADD COLUMN IF NOT EXISTS check_in_time VARCHAR(64);`;
+  await db`ALTER TABLE jmu_passes ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;`;
+  await db`ALTER TABLE jmu_passes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;`;
   await db`ALTER TABLE jmu_passes ALTER COLUMN address DROP NOT NULL;`;
   await db`CREATE INDEX IF NOT EXISTS idx_jmu_passes_pass_id ON jmu_passes(pass_id);`;
   tableChecked = true;

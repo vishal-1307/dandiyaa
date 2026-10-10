@@ -301,7 +301,7 @@
       summaryCat.textContent = `Solo Pass (${cleanQty} ${cleanQty === 1 ? 'Person' : 'Persons / Tickets'})`;
     }
     if (proceedBtnText) {
-      proceedBtnText.textContent = `Proceed to Payment (₹${price}) ➔`;
+      proceedBtnText.textContent = `Pay Now · ₹${price} ➔`;
     }
   };
 
@@ -331,7 +331,7 @@
 
       if (summaryAmount) summaryAmount.textContent = `₹${price}`;
       if (summaryCat) summaryCat.textContent = 'Couple Pass (Married Couple)';
-      if (proceedBtnText) proceedBtnText.textContent = `Proceed to Payment (₹${price}) ➔`;
+      if (proceedBtnText) proceedBtnText.textContent = `Pay Now · ₹${price} ➔`;
     } else {
       if (coupleFields) coupleFields.style.display = 'none';
       if (soloQtyGroup) soloQtyGroup.style.display = 'block';
@@ -348,7 +348,7 @@
       if (summaryCat) {
         summaryCat.textContent = `Solo Pass (${qty} ${qty === 1 ? 'Person' : 'Persons / Tickets'})`;
       }
-      if (proceedBtnText) proceedBtnText.textContent = `Proceed to Payment (₹${price}) ➔`;
+      if (proceedBtnText) proceedBtnText.textContent = `Pay Now · ₹${price} ➔`;
     }
   }
   window.selectWizardCategory = updateCategorySelection;
@@ -427,28 +427,65 @@
     startRazorpayPayment();
   };
 
+  // Resilient Razorpay SDK loader (prevents "SDK loading" failure on slower networks)
+  function ensureRazorpayLoaded() {
+    return new Promise((resolve) => {
+      if (typeof window.Razorpay === 'function') {
+        return resolve(true);
+      }
+      let existingScript = document.querySelector('script[src*="checkout.razorpay.com"]');
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve(true), { once: true });
+        existingScript.addEventListener('error', () => resolve(false), { once: true });
+        // Poll for up to 4 seconds
+        let checks = 0;
+        const interval = setInterval(() => {
+          checks++;
+          if (typeof window.Razorpay === 'function') {
+            clearInterval(interval);
+            resolve(true);
+          } else if (checks > 40) {
+            clearInterval(interval);
+            resolve(false);
+          }
+        }, 100);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+  }
+
   // Direct Razorpay Gateway Checkout Launcher
   window.startRazorpayPayment = async function () {
     const config = getConfig();
-    if (typeof Razorpay === 'undefined') {
-      showToast('Razorpay payment gateway is loading. Please try again in a moment.', 'info');
-      return;
-    }
-
     const price = wizardState.amount || (wizardState.category === 'solo' ? config.pricing.solo * (wizardState.quantity || 1) : config.pricing.couple);
     const qty = wizardState.category === 'solo' ? (wizardState.quantity || 1) : 1;
     const passId = generatePassId();
 
     const payBtn = document.getElementById('btn-proceed-pay');
     const payBtnText = document.getElementById('btn-proceed-pay-text');
-    const defaultBtnLabel = `Proceed to Payment (₹${price}) ➔`;
+    const defaultBtnLabel = `Pay Now · ₹${price} ➔`;
 
     if (payBtn) payBtn.disabled = true;
-    if (payBtnText) payBtnText.textContent = '⏳ Initializing Secure Checkout...';
+    if (payBtnText) payBtnText.textContent = 'Opening payment...';
 
     function resetPayBtn() {
       if (payBtn) payBtn.disabled = false;
       if (payBtnText) payBtnText.textContent = defaultBtnLabel;
+    }
+
+    // Ensure Razorpay SDK is ready
+    const isReady = await ensureRazorpayLoaded();
+    if (!isReady || typeof Razorpay === 'undefined') {
+      showToast('Payment system connecting. Please check your internet connection and try again.', 'error');
+      resetPayBtn();
+      return;
     }
 
     try {
@@ -465,7 +502,7 @@
 
       const orderData = await orderRes.json();
       if (!orderData.success || !orderData.order_id) {
-        throw new Error(orderData.error || 'Failed to initialize payment order');
+        throw new Error(orderData.error || 'Failed to initialize payment');
       }
 
       // 2. Open Razorpay Checkout Modal
@@ -491,16 +528,15 @@
         },
         modal: {
           ondismiss: function () {
-            showToast('Payment window closed. Click Proceed to try again.', 'info');
+            showToast('Payment window closed. Click Pay Now to retry.', 'info');
             resetPayBtn();
           }
         },
         handler: async function (response) {
-          // Received razorpay_payment_id, razorpay_order_id, razorpay_signature
           if (payBtnText) {
-            payBtnText.textContent = '🔐 Verifying Payment Signature...';
+            payBtnText.textContent = 'Confirming booking...';
           }
-          showToast('Verifying payment signature with server...', 'info');
+          showToast('Confirming your payment...', 'info');
 
           try {
             const passData = {
@@ -542,12 +578,12 @@
 
             const verifyData = await verifyRes.json();
             if (!verifyData.success) {
-              showToast('⚠️ Payment Verification Failed: ' + (verifyData.error || 'Invalid signature'), 'error');
+              showToast('Payment verification failed: ' + (verifyData.error || 'Invalid signature'), 'error');
               resetPayBtn();
               return;
             }
 
-            showToast('✓ Payment Verified! Ticket Confirmed & Approved!', 'success');
+            showToast('✓ Ticket confirmed & approved!', 'success');
             handlePaymentConfirmed({
               passId: passId,
               paymentMethod: 'razorpay',
@@ -566,8 +602,8 @@
       const rzp = new Razorpay(options);
       rzp.on('payment.failed', function (failResp) {
         console.error('Razorpay payment failed:', failResp.error);
-        const reason = (failResp.error && (failResp.error.description || failResp.error.reason)) || 'Payment was declined or cancelled';
-        showToast('❌ Payment Failed: ' + reason, 'error');
+        const reason = (failResp.error && (failResp.error.description || failResp.error.reason)) || 'Payment was declined';
+        showToast('Payment failed: ' + reason, 'error');
         resetPayBtn();
       });
       rzp.open();
@@ -1055,13 +1091,16 @@
   function renderAdminData() {
     const all = (adminPassesCache && adminPassesCache.length > 0) ? adminPassesCache : getRegistrations();
 
-    // Calculate metrics across ALL registered passes
+    const activePasses = all.filter(r => !r.isDeleted);
+    const archivedPasses = all.filter(r => Boolean(r.isDeleted));
+
+    // Calculate metrics across active registered passes
     let totalRevenue = 0;
     let approvedCount = 0;
     let pendingCount = 0;
     let checkedInCount = 0;
 
-    all.forEach(r => {
+    activePasses.forEach(r => {
       totalRevenue += Number(r.amount) || 0;
       if (r.status === 'approved') {
         approvedCount++;
@@ -1077,7 +1116,7 @@
     const statPendingEl = document.getElementById('admin-stat-pending');
     const statCheckedEl = document.getElementById('admin-stat-checked');
 
-    if (statTotalEl) statTotalEl.textContent = all.length;
+    if (statTotalEl) statTotalEl.textContent = activePasses.length;
     if (statRevEl) statRevEl.textContent = `₹${totalRevenue.toLocaleString('en-IN')}`;
     if (statApprovedEl) statApprovedEl.textContent = approvedCount;
     if (statPendingEl) statPendingEl.textContent = pendingCount;
@@ -1088,19 +1127,24 @@
     const fPending = document.getElementById('filter-count-pending');
     const fApproved = document.getElementById('filter-count-approved');
     const fChecked = document.getElementById('filter-count-checked');
-    if (fAll) fAll.textContent = all.length;
+    const fArchived = document.getElementById('filter-count-archived');
+
+    if (fAll) fAll.textContent = activePasses.length;
     if (fPending) fPending.textContent = pendingCount;
     if (fApproved) fApproved.textContent = approvedCount;
     if (fChecked) fChecked.textContent = checkedInCount;
+    if (fArchived) fArchived.textContent = archivedPasses.length;
 
     // Apply active filter
-    let list = all;
+    let list = activePasses;
     if (activeAdminFilter === 'pending') {
-      list = all.filter(r => r.status !== 'approved');
+      list = activePasses.filter(r => r.status !== 'approved');
     } else if (activeAdminFilter === 'approved') {
-      list = all.filter(r => r.status === 'approved');
+      list = activePasses.filter(r => r.status === 'approved');
     } else if (activeAdminFilter === 'checkedin') {
-      list = all.filter(r => r.checkedIn);
+      list = activePasses.filter(r => r.checkedIn);
+    } else if (activeAdminFilter === 'archived') {
+      list = archivedPasses;
     }
 
     // Apply live search query if present
@@ -1118,12 +1162,14 @@
 
     const showingCountEl = document.getElementById('admin-showing-count');
     if (showingCountEl) {
-      showingCountEl.textContent = `Showing ${list.length} of ${all.length} attendees`;
+      showingCountEl.textContent = `Showing ${list.length} attendees (${activeAdminFilter})`;
     }
 
     renderRegistrationsTable(list);
+    renderRegistrationsCards(list);
   }
 
+  // Desktop Table Rendering
   function renderRegistrationsTable(list) {
     const tbody = document.getElementById('admin-registrations-tbody');
     if (!tbody) return;
@@ -1135,16 +1181,17 @@
 
     tbody.innerHTML = list.map((item) => {
       const isApproved = item.status === 'approved';
+      const isArchived = Boolean(item.isDeleted);
       const cleanPhone = String(item.phone || '').replace(/[^0-9]/g, '');
       const waMsg = encodeURIComponent(`Namaste ${item.name}, Jaynagar Milan Utsav 2026 ke ticket (Pass ID: ${item.passId}) payment verification ke sambandh mein:`);
       
       return `
-        <tr>
+        <tr class="${isArchived ? 'archived-row' : ''}">
           <td>
-            <strong style="font-family:var(--font-mono); color:var(--gold); font-size:13.5px;">${escapeHtml(item.passId)}</strong>
+            <strong style="font-family:var(--font-mono, monospace); color:var(--gold); font-size:13.5px;">${escapeHtml(item.passId)}</strong>
           </td>
           <td>
-            <strong style="#fff;">${escapeHtml(item.name)}</strong>
+            <strong style="color:#fff;">${escapeHtml(item.name)}</strong>
             ${item.partnerName ? `<div style="font-size:12px; color:var(--gold); margin-top:2px;">+ ${escapeHtml(item.partnerName)}</div>` : ''}
             <div style="font-size:11px; color:var(--muted); margin-top:2px;">${escapeHtml(item.address || '-')}</div>
           </td>
@@ -1163,9 +1210,10 @@
             ` : ''}
           </td>
           <td>
-            ${isApproved
-              ? `<span class="badge badge-success">✓ Approved</span>`
-              : `<span class="badge badge-warning">⏳ Pending</span>`}
+            ${isArchived 
+              ? `<span class="badge badge-danger">🗑️ Archived</span>`
+              : (isApproved ? `<span class="badge badge-success">✓ Approved</span>` : `<span class="badge badge-warning">⏳ Pending</span>`)
+            }
           </td>
           <td>
             <span class="status-pill ${item.checkedIn ? 'checked-in' : 'pending'}">
@@ -1175,19 +1223,100 @@
           </td>
           <td>
             <div class="admin-actions-cell">
-              ${isApproved
-                ? `<button type="button" class="button outline small" style="padding:4px 8px; font-size:11px; min-height:28px;" onclick="adminMarkPendingPass('${escapeHtml(item.passId)}')">Undo Appr</button>`
-                : `<button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:#10b981; border-color:#10b981; color:#fff;" onclick="adminApprovePass('${escapeHtml(item.passId)}')">✓ Approve</button>`
-              }
-              <button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:var(--ink-2);" onclick="toggleCheckIn('${escapeHtml(item.passId)}')">
-                ${item.checkedIn ? 'Undo Entry' : '🚪 Admit'}
-              </button>
-              <button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:#ef4444; border-color:#ef4444; color:#fff;" onclick="adminDeletePass('${escapeHtml(item.passId)}', '${escapeHtml(item.name)}')">
-                🗑️ Delete
-              </button>
+              ${isArchived ? `
+                <button type="button" class="button small" style="padding:4px 10px; font-size:11px; min-height:28px; background:#10b981; border-color:#10b981; color:#fff;" onclick="adminRestorePass('${escapeHtml(item.passId)}', '${escapeHtml(item.name)}')">
+                  ↩️ Restore
+                </button>
+              ` : `
+                ${isApproved
+                  ? `<button type="button" class="button outline small" style="padding:4px 8px; font-size:11px; min-height:28px;" onclick="adminMarkPendingPass('${escapeHtml(item.passId)}')">Undo Appr</button>`
+                  : `<button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:#10b981; border-color:#10b981; color:#fff;" onclick="adminApprovePass('${escapeHtml(item.passId)}')">✓ Approve</button>`
+                }
+                <button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:var(--ink-2);" onclick="toggleCheckIn('${escapeHtml(item.passId)}')">
+                  ${item.checkedIn ? 'Undo Entry' : '🚪 Admit'}
+                </button>
+                <button type="button" class="button small" style="padding:4px 8px; font-size:11px; min-height:28px; background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.3); color:#ef4444;" onclick="adminDeletePass('${escapeHtml(item.passId)}', '${escapeHtml(item.name)}')">
+                  🗑️ Archive
+                </button>
+              `}
             </div>
           </td>
         </tr>
+      `;
+    }).join('');
+  }
+
+  // Mobile Cards Rendering (Phone Optimized touch UI)
+  function renderRegistrationsCards(list) {
+    const container = document.getElementById('admin-registrations-cards');
+    if (!container) return;
+
+    if (list.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding:28px 16px; color:var(--muted); background:#111714; border-radius:10px; border:1px solid var(--line);">No attendees found in this tab.</div>`;
+      return;
+    }
+
+    container.innerHTML = list.map(item => {
+      const isApproved = item.status === 'approved';
+      const isArchived = Boolean(item.isDeleted);
+      const cleanPhone = String(item.phone || '').replace(/[^0-9]/g, '');
+      const waMsg = encodeURIComponent(`Namaste ${item.name}, Jaynagar Milan Utsav 2026 ke ticket (${item.passId}) ke sambandh mein:`);
+      const qty = item.quantity || 1;
+
+      return `
+        <div class="admin-attendee-card ${item.checkedIn ? 'admitted' : ''} ${isArchived ? 'archived' : ''}">
+          <div class="aac-header">
+            <span class="aac-pass-id">${escapeHtml(item.passId)}</span>
+            <div class="aac-badges">
+              ${isArchived 
+                ? `<span class="badge badge-danger">🗑️ Archived</span>` 
+                : (isApproved ? `<span class="badge badge-success">✓ Approved</span>` : `<span class="badge badge-warning">⏳ Pending</span>`)
+              }
+              ${item.checkedIn ? `<span class="status-pill checked-in">🚪 Admitted</span>` : ''}
+            </div>
+          </div>
+
+          <div class="aac-body">
+            <div class="aac-name">${escapeHtml(item.name)}</div>
+            ${item.partnerName ? `<div class="aac-partner">👫 Spouse: ${escapeHtml(item.partnerName)}</div>` : ''}
+            <div class="aac-meta">
+              <span class="aac-meta-category">${escapeHtml(item.category || 'Solo')} · ${qty} ${qty > 1 ? 'Tickets' : 'Ticket'}</span>
+              <span class="aac-meta-amount">₹${escapeHtml(item.amount || '249')}</span>
+            </div>
+            ${item.address && item.address.trim() && item.address !== '-' ? `<div style="font-size:11.5px; color:var(--muted);">📍 ${escapeHtml(item.address)}</div>` : ''}
+            ${item.checkedIn && item.checkInTime ? `<div style="font-size:11.5px; color:#38bdf8; font-weight:700;">🚪 Admitted at: ${escapeHtml(item.checkInTime)}</div>` : ''}
+          </div>
+
+          ${cleanPhone ? `
+            <div class="aac-contact-row">
+              <a href="tel:${escapeHtml(item.phone)}" class="aac-contact-btn phone">
+                📞 Call Attendee
+              </a>
+              <a href="https://wa.me/91${cleanPhone}?text=${waMsg}" target="_blank" rel="noopener noreferrer" class="aac-contact-btn whatsapp">
+                💬 WhatsApp
+              </a>
+            </div>
+          ` : ''}
+
+          <div class="aac-actions-row">
+            ${isArchived ? `
+              <button type="button" class="aac-action-btn" style="background:#10b981; border-color:#10b981; color:#fff; grid-column:span 3;" onclick="adminRestorePass('${escapeHtml(item.passId)}', '${escapeHtml(item.name)}')">
+                ↩️ Restore to Active Roster
+              </button>
+            ` : `
+              ${isApproved
+                ? `<button type="button" class="aac-action-btn" style="background:var(--ink-2); color:var(--muted); border-color:var(--line);" onclick="adminMarkPendingPass('${escapeHtml(item.passId)}')">Undo Appr</button>`
+                : `<button type="button" class="aac-action-btn" style="background:#10b981; border-color:#10b981; color:#fff;" onclick="adminApprovePass('${escapeHtml(item.passId)}')">✓ Approve</button>`
+              }
+              <button type="button" class="aac-action-btn" style="background:${item.checkedIn ? 'rgba(56,189,248,0.2)' : 'var(--ink-2)'}; border-color:${item.checkedIn ? '#38bdf8' : 'var(--line)'}; color:${item.checkedIn ? '#38bdf8' : '#fff'};" onclick="toggleCheckIn('${escapeHtml(item.passId)}')">
+                ${item.checkedIn ? 'Undo Entry' : '🚪 Admit'}
+              </button>
+              <button type="button" class="aac-action-btn" style="background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.3); color:#ef4444;" onclick="adminDeletePass('${escapeHtml(item.passId)}', '${escapeHtml(item.name)}')">
+                🗑️ Archive
+              </button>
+            `}
+          </div>
+        </div>
       `;
     }).join('');
   }
@@ -1205,7 +1334,7 @@
       saveRegistration(item);
     }
     renderAdminData();
-    showToast(`✓ Pass ${passId} Approved & Verified!`, 'success');
+    showToast(`✓ Pass ${passId} Approved!`, 'success');
 
     try {
       await fetch('/api/all-passes', {
@@ -1230,7 +1359,7 @@
       saveRegistration(item);
     }
     renderAdminData();
-    showToast(`Pass ${passId} reverted to Pending`, 'info');
+    showToast(`Pass ${passId} marked as Pending`, 'info');
 
     try {
       await fetch('/api/all-passes', {
@@ -1246,20 +1375,23 @@
     }
   };
 
-  // Admin Delete Pass Action
+  // Admin Soft Delete (Archive) Action - Data is NEVER permanently destroyed
   window.adminDeletePass = async function (passId, attendeeName) {
     const config = getConfig();
-    const confirmed = confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE attendee "${attendeeName || passId}" (${passId})?\n\nThis will remove them from the database roster and they will no longer be able to retrieve this pass.`);
+    const confirmed = confirm(`Are you sure you want to archive attendee "${attendeeName || passId}" (${passId})?\n\nThis will safely move them to the Archived tab. The ticket and payment records remain 100% safe in the database and can be restored at any time.`);
     if (!confirmed) return;
 
-    // Optimistic removal from cache & local storage
-    adminPassesCache = adminPassesCache.filter(r => r.passId !== passId);
-    deleteLocalRegistration(passId);
+    let item = adminPassesCache.find(r => r.passId === passId) || getRegistrations().find(r => r.passId === passId);
+    if (item) {
+      item.isDeleted = true;
+      item.deletedAt = new Date().toISOString();
+      saveRegistration(item);
+    }
     renderAdminData();
-    showToast(`🗑️ Attendee ${passId} removed`, 'success');
+    showToast(`🗑️ Attendee ${passId} moved to Archive`, 'info');
 
     try {
-      const res = await fetch('/api/all-passes', {
+      await fetch('/api/all-passes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1267,11 +1399,34 @@
         },
         body: JSON.stringify({ action: 'delete', passId })
       });
-      if (res.ok) {
-        showToast(`✓ Pass ${passId} deleted permanently from cloud database`, 'success');
-      }
     } catch (err) {
-      console.warn('Cloud delete error:', err);
+      console.warn('Cloud archive error:', err);
+    }
+  };
+
+  // Admin Restore Action - Recovers accidentally deleted attendees
+  window.adminRestorePass = async function (passId, attendeeName) {
+    const config = getConfig();
+    let item = adminPassesCache.find(r => r.passId === passId) || getRegistrations().find(r => r.passId === passId);
+    if (item) {
+      item.isDeleted = false;
+      item.deletedAt = null;
+      saveRegistration(item);
+    }
+    renderAdminData();
+    showToast(`✓ Attendee ${passId} restored to active roster!`, 'success');
+
+    try {
+      await fetch('/api/all-passes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': config.adminPin
+        },
+        body: JSON.stringify({ action: 'restore', passId })
+      });
+    } catch (err) {
+      console.warn('Cloud restore sync error:', err);
     }
   };
 

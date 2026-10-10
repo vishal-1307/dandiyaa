@@ -35,10 +35,26 @@ module.exports = async function handler(req, res) {
 
       const cleanPassId = passId.trim().toUpperCase();
 
-      // Action: DELETE ATTENDEE ("kisi bande ko hatane")
+      // Action: ARCHIVE / SOFT DELETE ATTENDEE (Data Safe - never permanently destroyed)
       if (action === 'delete') {
-        await db`DELETE FROM jmu_passes WHERE UPPER(pass_id) = ${cleanPassId};`;
-        return res.status(200).json({ success: true, action: 'delete', passId: cleanPassId });
+        await db`
+          UPDATE jmu_passes 
+          SET is_deleted = TRUE,
+              deleted_at = CURRENT_TIMESTAMP
+          WHERE UPPER(pass_id) = ${cleanPassId};
+        `;
+        return res.status(200).json({ success: true, action: 'delete', passId: cleanPassId, isDeleted: true });
+      }
+
+      // Action: RESTORE ATTENDEE (Undo deletion)
+      if (action === 'restore') {
+        await db`
+          UPDATE jmu_passes 
+          SET is_deleted = FALSE,
+              deleted_at = NULL
+          WHERE UPPER(pass_id) = ${cleanPassId};
+        `;
+        return res.status(200).json({ success: true, action: 'restore', passId: cleanPassId, isDeleted: false });
       }
 
       // Action: APPROVE ATTENDEE ("approve karne tak ka saara chiz")
@@ -133,6 +149,8 @@ module.exports = async function handler(req, res) {
         COALESCE(payment_method, 'upi') as "paymentMethod",
         razorpay_order_id as "razorpayOrderId",
         razorpay_payment_id as "razorpayPaymentId",
+        COALESCE(is_deleted, FALSE) as "isDeleted",
+        deleted_at as "deletedAt",
         created_at as "createdAt"
       FROM jmu_passes 
       ORDER BY timestamp DESC;

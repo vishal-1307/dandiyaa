@@ -46,7 +46,7 @@
   <meta name="apple-mobile-web-app-title" content="Milan Utsav">
 
   <link rel="stylesheet" href="styles-v2.css">
-  <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="qrcode.bundle.js" defer></script>
   <script src="html2canvas.bundle.js" defer></script>
   <script src="app.js" defer></script>
@@ -817,13 +817,13 @@
             <div class="form-summary-card">
               <div>
                 <span id="reg-summary-category">Solo Pass (1 Ticket)</span>
-                <p style="font-size:12px; color:var(--muted); margin:2px 0 0;">Instant verified digital entry pass</p>
+                <p style="font-size:12px; color:var(--muted); margin:2px 0 0;">Official entry pass with QR code</p>
               </div>
               <strong id="reg-summary-amount">₹249</strong>
             </div>
 
             <button type="submit" class="button" style="width:100%;" id="btn-proceed-pay">
-              <span id="btn-proceed-pay-text">Proceed to Payment (₹249) ➔</span>
+              <span id="btn-proceed-pay-text">Pay Now · ₹249 ➔</span>
             </button>
           </form>
         </div>
@@ -1022,6 +1022,7 @@
               <button type="button" class="admin-filter-btn" data-filter="pending" onclick="setAdminFilter('pending')">⏳ Pending (<span id="filter-count-pending">0</span>)</button>
               <button type="button" class="admin-filter-btn" data-filter="approved" onclick="setAdminFilter('approved')">✅ Approved (<span id="filter-count-approved">0</span>)</button>
               <button type="button" class="admin-filter-btn" data-filter="checkedin" onclick="setAdminFilter('checkedin')">🚪 Gate Admitted (<span id="filter-count-checked">0</span>)</button>
+              <button type="button" class="admin-filter-btn" data-filter="archived" onclick="setAdminFilter('archived')">🗑️ Archived (<span id="filter-count-archived">0</span>)</button>
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:14px; flex-wrap:wrap;">
@@ -1030,8 +1031,8 @@
             </div>
           </div>
 
-          <!-- Attendees Table -->
-          <div class="admin-table-wrap">
+          <!-- Attendees Desktop Table -->
+          <div class="admin-table-wrap desktop-only">
             <table class="admin-table">
               <thead>
                 <tr>
@@ -1041,13 +1042,18 @@
                   <th>Mobile</th>
                   <th>Payment Status</th>
                   <th>Gate Entry</th>
-                  <th style="min-width:230px;">Actions (Approve / Remove / Admit)</th>
+                  <th style="min-width:230px;">Actions (Approve / Admit / Archive)</th>
                 </tr>
               </thead>
               <tbody id="admin-registrations-tbody">
                 <!-- Injected via app.js -->
               </tbody>
             </table>
+          </div>
+
+          <!-- Attendees Mobile Card View (Phone Optimized) -->
+          <div class="admin-cards-wrap mobile-only" id="admin-registrations-cards">
+            <!-- Injected via app.js -->
           </div>
 
           <!-- Organizer Live Settings Override -->

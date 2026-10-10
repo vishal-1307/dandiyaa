@@ -2132,6 +2132,205 @@ footer {
   font-weight: 700;
 }
 
+/* --- Mobile Responsive Attendee Cards & Layout Controls --- */
+.mobile-only {
+  display: none !important;
+}
+.desktop-only {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: flex !important;
+  }
+  
+  .admin-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .admin-stat-card {
+    padding: 10px !important;
+  }
+  .admin-stat-card strong {
+    font-size: 20px !important;
+  }
+  
+  .gate-terminal-box {
+    padding: 14px !important;
+  }
+  
+  .admin-filter-bar {
+    overflow-x: auto;
+    padding-bottom: 6px;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important;
+  }
+  .admin-filter-btn {
+    padding: 7px 12px !important;
+    font-size: 12px !important;
+    flex-shrink: 0;
+  }
+}
+
+.admin-cards-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.admin-attendee-card {
+  background: #111714;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s ease;
+}
+
+.admin-attendee-card.admitted {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.08) 0%, #111714 100%);
+}
+
+.admin-attendee-card.archived {
+  opacity: 0.75;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.06) 0%, #111714 100%);
+}
+
+.aac-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aac-pass-id {
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--gold);
+  background: rgba(230, 188, 112, 0.12);
+  border: 1px solid rgba(230, 188, 112, 0.3);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.aac-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aac-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aac-name {
+  font-size: 16.5px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.3;
+}
+
+.aac-partner {
+  font-size: 12.5px;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.aac-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.aac-meta-category {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.aac-meta-amount {
+  font-weight: 700;
+  color: #fff;
+}
+
+.aac-contact-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.aac-contact-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  min-height: 38px;
+}
+
+.aac-contact-btn.phone {
+  background: var(--panel-light);
+  border: 1px solid var(--line);
+  color: var(--paper);
+}
+
+.aac-contact-btn.whatsapp {
+  background: rgba(37, 211, 102, 0.15);
+  border: 1px solid rgba(37, 211, 102, 0.35);
+  color: #25D366;
+}
+
+.aac-actions-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.aac-action-btn {
+  padding: 8px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid transparent;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* --- Floating Toasts --- */
 .toast-container {
   position: fixed;

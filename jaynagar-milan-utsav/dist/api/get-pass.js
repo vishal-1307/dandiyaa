@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
         razorpay_order_id as "razorpayOrderId",
         razorpay_payment_id as "razorpayPaymentId"
       FROM jmu_passes 
-      WHERE UPPER(pass_id) = ${cleanId}
+      WHERE UPPER(pass_id) = ${cleanId} AND (is_deleted IS NOT TRUE)
       LIMIT 1;
     `;
 
