@@ -1,11 +1,18 @@
 const { neon } = require('@neondatabase/serverless');
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_rZjFwcL21xRW@ep-morning-scene-aoawys2b-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+// Load environment variables locally if .env exists
+try {
+  require('dotenv').config();
+} catch (_) {}
 
 let sql = null;
 
 function getDb() {
   if (!sql) {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is missing. Please set DATABASE_URL in Vercel or your environment file.');
+    }
     sql = neon(connectionString);
   }
   return sql;
