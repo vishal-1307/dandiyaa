@@ -45,14 +45,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Milan Utsav">
 
-  <link rel="stylesheet" href="styles-v2.css?v=6">
+  <link rel="stylesheet" href="styles-v2.css?v=7">
   <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
   <script src="qrcode.bundle.js" defer></script>
   <script src="html2canvas.bundle.js" defer></script>
-  <script src="campaign-config.js?v=6" defer></script>
-  <script src="security-ui.js?v=6" defer></script>
-  <script src="checkout-loader.js?v=6" defer></script>
-  <script src="app.js?v=6" defer></script>
+  <script src="campaign-config.js?v=7" defer></script>
+  <script src="security-ui.js?v=7" defer></script>
+  <script src="checkout-loader.js?v=7" defer></script>
+  <script src="app.js?v=7" defer></script>
 
   <!-- JSON-LD Structured Data: Event Schema & Organization Schema -->
   <script type="application/ld+json">
@@ -921,6 +921,9 @@
                 <span>Copy Pass ID</span>
               </button>
             </div>
+            <p class="pass-download-help">Downloads are saved in Downloads / Files, not automatically in Photos. After downloading, long-press the image preview below and choose Save Image, or use Save / Share Image where supported.</p>
+            <button type="button" id="btn-save-pass-image" class="button outline" hidden data-ui-event="click" data-ui-handler="savePassImage" data-ui-args="[]">Save / Share Image</button>
+            <img id="pass-image-preview" class="pass-image-preview" hidden alt="Your verified entry pass image. Long-press to save where supported.">
           </div>
         </div>
       </div>

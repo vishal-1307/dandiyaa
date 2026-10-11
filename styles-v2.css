@@ -1900,6 +1900,10 @@ footer {
   flex: 1 1 150px;
 }
 
+.pass-download-help { color: var(--muted); font-size: 13px; line-height: 1.6; margin-top: 14px; }
+.pass-image-preview { width: 100%; height: auto; border-radius: 12px; margin-top: 16px; }
+#pass-image-preview[hidden], #btn-save-pass-image[hidden] { display: none; }
+
 .lookup-pass-header {
   display: flex;
   align-items: center;

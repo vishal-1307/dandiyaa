@@ -449,7 +449,11 @@ let checkoutBusy=false;
   };
 
   // Step 3: Render Digital Pass Plaque & Setup WhatsApp Submission
+  let generatedPassImage=null;
 function renderStep3Pass(pass) {
+    generatedPassImage=null;
+    const preview=document.getElementById('pass-image-preview');if(preview){preview.hidden=true;preview.removeAttribute('src');}
+    const share=document.getElementById('btn-save-pass-image');if(share)share.hidden=true;
     const values={'pass-name-display':pass.name,'pass-cat-display':pass.category+' · '+pass.capacity+' persons',
       'pass-partner-display':pass.partnerName,'pass-amount-display':'₹'+pass.amount+'/-','pass-code-display':visibleTicketId(pass)};
     for(const [id,value] of Object.entries(values)){const element=document.getElementById(id);if(element)element.textContent=value||'';}
@@ -482,6 +486,7 @@ function renderStep3Pass(pass) {
     if(!wizardState.currentPass||wizardState.currentPass.status!=='approved'||wizardState.currentPass.isDeleted||wizardState.currentPass.awaitingDetails){showToast('Complete verified payment before downloading a ticket','error');return;}
     const passCard = document.getElementById('digital-pass-card');
     if (!passCard) return;
+    const selectedPass=wizardState.currentPass;
 
     showToast('Generating high-res Pass image...', 'info');
 
@@ -491,19 +496,36 @@ function renderStep3Pass(pass) {
         useCORS: true,
         backgroundColor: '#111714',
         logging: false
-      }).then(canvas => {
+      }).then(async canvas => {
+        if(wizardState.currentPass!==selectedPass)return;
+        const filename=visibleTicketId(selectedPass)+'-Digital-Pass.png';
+        const dataUrl=canvas.toDataURL('image/png');
+        generatedPassImage={passId:selectedPass.passId,dataUrl,file:null};
+        const preview=document.getElementById('pass-image-preview');if(preview){preview.src=dataUrl;preview.hidden=false;}
         const link = document.createElement('a');
-        link.download = `${wizardState.currentPass ? visibleTicketId(wizardState.currentPass) : 'JMU'}-Digital-Pass.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        showToast('✓ Digital Pass downloaded to device!', 'success');
-      }).catch(err => {
-        console.error('Pass download error:', err);
-        window.print();
+        link.download=filename;link.href=dataUrl;
+        document.body.appendChild(link);link.click();link.remove();
+        showToast('Download requested. Check Downloads / Files. For Photos, save the image preview below.','info');
+        if(window.File&&canvas.toBlob&&navigator.share&&navigator.canShare){
+          const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+          if(wizardState.currentPass!==selectedPass)return;
+          if(blob){const file=new File([blob],filename,{type:'image/png'});
+            if(navigator.canShare({files:[file]})){generatedPassImage.file=file;const share=document.getElementById('btn-save-pass-image');if(share)share.hidden=false;}
+          }
+        }
+      }).catch(() => {
+        showToast('Could not create the ticket image. Please retry Download Pass; your booking is unchanged.','error');
       });
     } else {
-      window.print();
+      showToast('Ticket image tools have not loaded. Refresh My Pass and retry. Your booking is unchanged.','error');
     }
+  };
+
+  window.savePassImage=async function(){
+    const pass=wizardState.currentPass,image=generatedPassImage;
+    if(!pass||pass.status!=='approved'||pass.isDeleted||pass.awaitingDetails||image?.passId!==pass.passId||!image.file)return;
+    try{await navigator.share({files:[image.file],title:'Jaynagar Milan Utsav Entry Pass'});}
+    catch(error){if(error.name!=='AbortError')showToast('Sharing is unavailable. Long-press the image preview to save it, or open the downloaded PNG in Files.','info');}
   };
 
   async function retrieveOwnPass(id){
@@ -757,7 +779,7 @@ function actionButton(item,action,label){return `<button type="button" class="bu
   };
   window.handleSaveSettings=async function(event){event?.preventDefault();try{await adminRequest('/api/admin-session');saveConfigOverride({whatsappGroupLink:document.getElementById('cfg-whatsapp-group')?.value||''});showToast('Community link saved on this device');}catch(error){showToast(error.message,'error');}};
   function bindInterface(){
-    const handlers=['openRegistrationModal','closeRegistrationModal','openMyPassModal','closeMyPassModal','stepSoloQuantity','selectWizardCategory','handleStep1Submit','downloadPassAsImage','copyCurrentPassId','handleMyPassSearch','openAdminModal','closeAdminModal','handleAdminLogin','refreshAdminDataFromCloud','exportRegistrationsCSV','clearGateInput','handleGateTerminalSubmit','setAdminFilter','handleAdminSearch','handleSaveSettings','adminLogout'];
+    const handlers=['openRegistrationModal','closeRegistrationModal','openMyPassModal','closeMyPassModal','stepSoloQuantity','selectWizardCategory','handleStep1Submit','downloadPassAsImage','savePassImage','copyCurrentPassId','handleMyPassSearch','openAdminModal','closeAdminModal','handleAdminLogin','refreshAdminDataFromCloud','exportRegistrationsCSV','clearGateInput','handleGateTerminalSubmit','setAdminFilter','handleAdminSearch','handleSaveSettings','adminLogout'];
     for(const type of ['click','submit','input'])document.addEventListener(type,event=>{
       const target=event.target.closest('[data-ui-event="'+type+'"]');if(!target||target.disabled||!handlers.includes(target.dataset.uiHandler))return;
       if(type==='submit')event.preventDefault();

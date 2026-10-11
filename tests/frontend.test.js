@@ -17,7 +17,7 @@ function browserFixture(fetch,options={}){
   const store={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},sessionEntries=new Map(options.session||[]);
   const sessionStore={getItem:key=>sessionEntries.get(key)||null,setItem:(key,value)=>sessionEntries.set(key,value),removeItem:key=>sessionEntries.delete(key)};
   const qr=[];const context={document:doc,localStorage:store,sessionStorage:sessionStore,fetch,JmuSecurityUI:ui,JmuPricing:require('../campaign-config'),console,URL,URLSearchParams,TextEncoder,
-    crypto:require('node:crypto').webcrypto,Uint8Array,Blob,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
+    crypto:require('node:crypto').webcrypto,Uint8Array,Blob,File,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
     location:{hash:options.hash||'',origin:'https://event.example',pathname:'/',search:''},history:{replaceState(...args){history.push(args);context.location.hash='';}},navigator:{},QRCode:{toCanvas:(canvas,text,opts,cb)=>{qr.push(text);cb(null);}},prompt:()=>null,confirm:()=>false};
   context.window=context;context.JmuCheckoutSDK={load:require('../checkout-loader').createLoader(context,doc)};
   vm.createContext(context);vm.runInContext(source,context);listeners.DOMContentLoaded();
@@ -333,4 +333,44 @@ test('unpaid My Pass remains pending without routine organizer confirmation; mis
     assert.ok(resultText(browser).includes('after payment is verified'));assert.ok(!/organizer reconciliation/i.test(resultText(browser)));
     assert.ok(!resultCard(browser).children.some(child=>child.className==='lookup-pass-actions'));
   }
+});
+
+test('download prepares an image preview; native sharing needs a second explicit tap and uses only the selected ticket PNG',async()=>{
+  const browser=browserFixture(async()=>response({}));let shares=0;
+  browser.context.navigator.canShare=({files})=>files[0].type==='image/png';
+  browser.context.navigator.share=async({files})=>{shares++;assert.equal(files[0].name,'JMU-00012-Digital-Pass.png');};
+  browser.context.html2canvas=async()=>({toDataURL:()=> 'data:image/png;base64,fixture',toBlob:callback=>callback(new Blob(['fixture'],{type:'image/png'}))});
+  browser.context.handlePaymentConfirmed(paidPass);await browser.context.downloadPassAsImage();
+  assert.equal(shares,0);assert.equal(browser.doc.getElementById('pass-image-preview').hidden,false);
+  assert.equal(browser.doc.getElementById('pass-image-preview').src,'data:image/png;base64,fixture');
+  assert.equal(browser.doc.getElementById('btn-save-pass-image').hidden,false);
+  await browser.context.savePassImage();assert.equal(shares,1);
+  browser.context.handlePaymentConfirmed({...paidPass,passId:'JMU-'+ 'B'.repeat(32),ticketId:'JMU-00013'});
+  assert.equal(browser.doc.getElementById('pass-image-preview').src,undefined);assert.equal(browser.doc.getElementById('btn-save-pass-image').hidden,true);
+  await browser.context.savePassImage();assert.equal(shares,1,'a different booking cannot share the previous ticket image');
+});
+
+test('share cancellation and unsupported sharing retain the PNG preview; rendering failure never reports a successful download or silently prints',async()=>{
+  for(const shareSupported of [true,false]){
+    const browser=browserFixture(async()=>response({}));browser.context.handlePaymentConfirmed(paidPass);
+    browser.context.navigator.canShare=()=>shareSupported;browser.context.navigator.share=async()=>{const e=new Error('fixture cancellation');e.name='AbortError';throw e;};
+    browser.context.html2canvas=async()=>({toDataURL:()=> 'data:image/png;base64,fixture',toBlob:cb=>cb(new Blob(['fixture']))});
+    await browser.context.downloadPassAsImage();assert.equal(browser.doc.getElementById('btn-save-pass-image').hidden,!shareSupported);
+    await browser.context.savePassImage();assert.equal(browser.doc.getElementById('pass-image-preview').hidden,false);
+  }
+  const browser=browserFixture(async()=>response({}));browser.context.handlePaymentConfirmed(paidPass);
+  browser.context.print=()=>assert.fail('PNG failure must not silently switch to printing');
+  browser.context.html2canvas=async()=>{throw Error('fixture render failure');};await browser.context.downloadPassAsImage();
+  assert.equal(browser.clicks.length,0);assert.equal(browser.doc.getElementById('pass-image-preview').hidden,true);
+  assert.ok(browser.doc.getElementById('toast-container').children.some(toast=>toast.children[0].textContent.includes('Could not create the ticket image')));
+  assert.ok(html.includes('not automatically in Photos'));
+});
+
+test('switching tickets while the image renders cannot download or share the old image under a different Ticket ID',async()=>{
+  const browser=browserFixture(async()=>response({}));let resolveCanvas;
+  browser.context.html2canvas=()=>new Promise(resolve=>{resolveCanvas=resolve;});
+  browser.context.handlePaymentConfirmed(paidPass);const pending=browser.context.downloadPassAsImage();
+  browser.context.handlePaymentConfirmed({...paidPass,passId:'JMU-'+ 'B'.repeat(32),ticketId:'JMU-00013'});
+  resolveCanvas({toDataURL:()=> 'data:image/png;base64,old-fixture'});await pending;
+  assert.equal(browser.clicks.length,0);assert.equal(browser.doc.getElementById('pass-image-preview').hidden,true);
 });
