@@ -69,7 +69,7 @@ test('ambiguous provider timeout is durable and does not create another order on
   const response={setHeader(){},status(code){this.code=code;return this;},json(body){this.body=body;return this;}};
   await h.handlers.createOrder({method:'POST',headers:{origin:env.APP_ORIGIN,'content-type':'application/json'},body:h.valid},response);
   assert.equal(response.code,503);assert.equal([...h.repo.orders.values()][0].state,'unknown');
-  const retry=await h.book();assert.equal(retry.code,409);assert.equal(h.calls.create,0);assert.ok(!JSON.stringify(response.body).includes('private provider error'));
+  const retry=await h.book();assert.equal(retry.code,503);assert.equal(h.calls.create,0);assert.ok(!JSON.stringify(response.body).includes('private provider error'));
 });
 test('configuration failure contains no embedded credential or detailed error',async()=>{
   const handlers=createHandlers({env:{APP_ORIGIN:env.APP_ORIGIN},database:()=>{throw new Error('must not connect');}});

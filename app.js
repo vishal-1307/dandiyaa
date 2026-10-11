@@ -155,15 +155,22 @@ function getMyPasses() {
       return Array.isArray(values) ? values.filter(p=>/^JMU-[A-Z0-9]{4,60}$/.test(p.passId)&&/^[A-Za-z0-9_-]{43}$/.test(p.recoveryToken)) : [];
     } catch { return []; }
   }
-  function saveOwnerAccess(passId,recoveryToken) {
+  function saveOwnerAccess(passId,recoveryToken,ticketId=null) {
     const entries=getMyPasses().filter(p=>p.passId!==passId);
-    entries.unshift({passId,recoveryToken});
+    entries.unshift({passId,recoveryToken,...(ticketId?{ticketId}:{})});
     localStorage.setItem('jmu_owner_tokens_v2',JSON.stringify(entries.slice(0,20)));
   }
   function ownerOptions(passId) {
-    const access=getMyPasses().find(p=>p.passId===passId);
+    const access=getMyPasses().find(p=>p.passId===passId||p.ticketId===passId);
     if (!access) throw new Error('Ask the organizer for a secure recovery link for this ticket');
     return { headers: { Authorization:'Bearer '+access.recoveryToken } };
+  }
+  const visibleTicketId = pass => pass.ticketId || (pass.status==='approved' ? pass.passId : 'Payment confirmation pending');
+  function pendingDetails(passId,value){
+    // Only this customer's in-progress form, in this tab. No unpaid PII in the DB.
+    const key='jmu_pending_details_v1:'+passId;
+    if(value){sessionStorage.setItem(key,JSON.stringify(value));return value;}
+    try{return JSON.parse(sessionStorage.getItem(key)||'null');}catch{return null;}
   }
 
   // Open Registration Modal
@@ -343,7 +350,7 @@ function getMyPasses() {
     };
 
     // Immediately launch Razorpay Standard Checkout
-    startRazorpayPayment();
+    return startRazorpayPayment();
   };
 
   // SDK failure is distinct from order/API failures and happens before allocation.
@@ -382,6 +389,7 @@ let checkoutBusy=false;
       const booking=await apiRequest('/api/create-order',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({...input,idempotencyKey:attempt.key})});
       saveOwnerAccess(booking.passId,booking.recoveryToken);
+      const details=pendingDetails(booking.passId,{...input,idempotencyKey:attempt.key});
       const quote=booking.pricing;
       const detail=document.getElementById('reg-pricing-detail');
       if(detail&&quote){
@@ -397,6 +405,11 @@ let checkoutBusy=false;
       if(label)label.textContent='Pay Now · ₹'+wizardState.amount+' ➔';
       const existing=await apiRequest('/api/get-pass?id='+encodeURIComponent(booking.passId),ownerOptions(booking.passId));
       if(existing.pass.status==='approved') { handlePaymentConfirmed(existing.pass); reset(); return; }
+      if(existing.pass.awaitingDetails&&existing.pass.paymentState==='verified'){
+        const completed=await apiRequest('/api/verify-payment',{method:'POST',headers:{'Content-Type':'application/json',...ownerOptions(booking.passId).headers},
+          body:JSON.stringify({passId:booking.passId,resume:true,bookingDetails:details})});
+        handlePaymentConfirmed(completed.pass);reset();return;
+      }
       const options={key:booking.key_id,order_id:booking.order_id,amount:booking.amount,currency:booking.currency,
         name:'Jaynagar Milan Utsav 2026',description:input.category==='couple'?'Married Couple Pass':
           'Solo · '+(quote?.promotionalQuantity||0)+' early-bird + '+(quote?.regularQuantity??input.quantity)+' regular',
@@ -407,7 +420,7 @@ let checkoutBusy=false;
           try {
             const verified=await apiRequest('/api/verify-payment',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+booking.recoveryToken},
               body:JSON.stringify({passId:booking.passId,razorpay_order_id:response.razorpay_order_id,
-                razorpay_payment_id:response.razorpay_payment_id,razorpay_signature:response.razorpay_signature})});
+                razorpay_payment_id:response.razorpay_payment_id,razorpay_signature:response.razorpay_signature,bookingDetails:details})});
             handlePaymentConfirmed(verified.pass);
           } catch(error) { showToast('Confirmation pending: '+error.message+'. Refresh My Pass or contact the organizer. Do not pay again.','error'); }
           finally { reset(); }
@@ -422,10 +435,15 @@ let checkoutBusy=false;
       if(error.code==='PROMOTION_EXPIRED'&&confirm('The promotional reservation expired. If money was debited, do not pay again—contact the organizer for review/refund. Only if NO payment was made, start a new booking?')){
         localStorage.removeItem('jmu_booking_attempt_v2');showToast('New booking enabled. Press Pay Now to request a fresh server quote.');
       }
+      if(error.code==='CHECKOUT_PENDING'&&confirm('The previous checkout could not be recovered yet. If a payment window opened or money was debited, do NOT start again. Only if NO payment window opened and NO payment was made, start a separate fresh checkout?')){
+        localStorage.removeItem('jmu_booking_attempt_v2');showToast('Fresh checkout enabled. Press Pay Now for a new server-confirmed price.');
+      }
     }
   };
   window.handlePaymentConfirmed = function (pass) {
     if(!pass || pass.status!=='approved' || pass.isDeleted) { showToast('Server confirmation required before a ticket can be issued','error'); return; }
+    const access=getMyPasses().find(p=>p.passId===pass.passId);if(access)saveOwnerAccess(pass.passId,access.recoveryToken,pass.ticketId);
+    sessionStorage.removeItem('jmu_pending_details_v1:'+pass.passId);
     wizardState.currentPass=pass;
     renderStep3Pass(pass);setWizardStep(3);showToast('Your payment is verified and your ticket is ready','success');
   };
@@ -433,7 +451,7 @@ let checkoutBusy=false;
   // Step 3: Render Digital Pass Plaque & Setup WhatsApp Submission
 function renderStep3Pass(pass) {
     const values={'pass-name-display':pass.name,'pass-cat-display':pass.category+' · '+pass.capacity+' persons',
-      'pass-partner-display':pass.partnerName,'pass-amount-display':'₹'+pass.amount+'/-','pass-code-display':pass.passId};
+      'pass-partner-display':pass.partnerName,'pass-amount-display':'₹'+pass.amount+'/-','pass-code-display':visibleTicketId(pass)};
     for(const [id,value] of Object.entries(values)){const element=document.getElementById(id);if(element)element.textContent=value||'';}
     const partner=document.getElementById('pass-partner-wrap');if(partner)partner.style.display=pass.partnerName?'block':'none';
     for(const id of ['pass-phone-wrap','pass-addr-wrap']){const element=document.getElementById(id);if(element)element.style.display='none';}
@@ -450,17 +468,18 @@ function renderStep3Pass(pass) {
   window.copyCurrentPassId = function () {
     if (wizardState.currentPass && wizardState.currentPass.passId) {
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(wizardState.currentPass.passId).then(() => {
-          showToast('✓ Pass ID copied: ' + wizardState.currentPass.passId, 'success');
+        navigator.clipboard.writeText(visibleTicketId(wizardState.currentPass)).then(() => {
+          showToast('✓ Pass ID copied: ' + visibleTicketId(wizardState.currentPass), 'success');
         });
       } else {
-        prompt('Copy Pass ID:', wizardState.currentPass.passId);
+        prompt('Copy Pass ID:', visibleTicketId(wizardState.currentPass));
       }
     }
   };
 
   // Download Pass as Image via html2canvas
   window.downloadPassAsImage = function () {
+    if(!wizardState.currentPass||wizardState.currentPass.status!=='approved'||wizardState.currentPass.awaitingDetails){showToast('Complete verified payment before downloading a ticket','error');return;}
     const passCard = document.getElementById('digital-pass-card');
     if (!passCard) return;
 
@@ -474,7 +493,7 @@ function renderStep3Pass(pass) {
         logging: false
       }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `${wizardState.currentPass ? wizardState.currentPass.passId : 'JMU'}-Digital-Pass.png`;
+        link.download = `${wizardState.currentPass ? visibleTicketId(wizardState.currentPass) : 'JMU'}-Digital-Pass.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         showToast('✓ Digital Pass downloaded to device!', 'success');
@@ -487,10 +506,18 @@ function renderStep3Pass(pass) {
     }
   };
 
-window.openMyPassModal=function(){
+window.openMyPassModal=async function(){
     document.getElementById('mypass-modal')?.classList.add('active');document.body.classList.add('modal-open');
-    const saved=getMyPasses()[0];const input=document.getElementById('mypass-search-input');if(input&&saved)input.value=saved.passId;
+    const entries=getMyPasses(),saved=entries.find(p=>p.ticketId);const input=document.getElementById('mypass-search-input');if(input)input.value=saved?.ticketId||'';
     const results=document.getElementById('mypass-results');if(results)results.textContent='Enter your Ticket ID. This device needs its saved booking access or an organizer recovery link.';
+    if(!saved&&entries[0])try{
+      let data=await apiRequest('/api/get-pass?id='+encodeURIComponent(entries[0].passId),ownerOptions(entries[0].passId));
+      const details=pendingDetails(data.pass.passId);
+      if(data.pass.awaitingDetails&&data.pass.paymentState==='verified'&&details)data=await apiRequest('/api/verify-payment',{
+        method:'POST',headers:{'Content-Type':'application/json',...ownerOptions(data.pass.passId).headers},body:JSON.stringify({passId:data.pass.passId,resume:true,bookingDetails:details})});
+      if(data.pass.ticketId){saveOwnerAccess(data.pass.passId,entries[0].recoveryToken,data.pass.ticketId);if(input)input.value=data.pass.ticketId;}
+      renderLookupResult(data.pass);
+    }catch(error){if(results)results.textContent=error.message;}
   };
   window.closeMyPassModal=function(){document.getElementById('mypass-modal')?.classList.remove('active');document.body.classList.remove('modal-open');};
   window.handleMyPassSearch=async function(event){
@@ -502,7 +529,14 @@ window.openMyPassModal=function(){
       if(!/^JMU-[A-Z0-9]{4,60}$/.test(id))throw new Error('Enter a valid Ticket ID');
       if(recovery){if(!/^[A-Za-z0-9_-]{43}$/.test(recovery))throw new Error('Enter the recovery code supplied by the organizer');saveOwnerAccess(id,recovery);}
       if(results)results.textContent='Checking the official ticket record...';
-      const data=await apiRequest('/api/get-pass?id='+encodeURIComponent(id),ownerOptions(id));
+      let data=await apiRequest('/api/get-pass?id='+encodeURIComponent(id),ownerOptions(id));
+      const access=getMyPasses().find(p=>p.passId===id||p.ticketId===id);
+      if(access)saveOwnerAccess(data.pass.passId,access.recoveryToken,data.pass.ticketId);
+      if(data.pass.awaitingDetails&&data.pass.paymentState==='verified'){
+        const details=pendingDetails(data.pass.passId);
+        if(details)data=await apiRequest('/api/verify-payment',{method:'POST',headers:{'Content-Type':'application/json',...ownerOptions(data.pass.passId).headers},
+          body:JSON.stringify({passId:data.pass.passId,resume:true,bookingDetails:details})});
+      }
       renderLookupResult(data.pass);
     }catch(error){if(results)results.textContent=error.message;showToast(error.message,'error');}
   };
@@ -510,8 +544,9 @@ window.openMyPassModal=function(){
     const container=document.getElementById('mypass-results');if(!container)return;
     container.replaceChildren();
     const card=document.createElement('div');card.className='lookup-pass-card';
-    for(const line of [pass.passId,pass.name,pass.category+' · '+pass.capacity+' persons · ₹'+pass.amount,
-      pass.isDeleted?'Ticket archived':pass.status==='approved'?'Payment verified':pass.paymentState==='review_required'?
+    for(const line of [visibleTicketId(pass),pass.name,pass.category+' · '+pass.capacity+' persons · ₹'+pass.amount,
+      pass.isDeleted?'Ticket archived':pass.status==='approved'?'Payment verified':pass.awaitingDetails&&pass.paymentState==='verified'?
+        'Payment verified. Return to the same booking form to finish your original ticket details.':pass.paymentState==='review_required'?
         'Promotional reservation expired. Payment requires organizer review/refund; this ticket cannot be admitted. Do not pay again.':'Confirmation pending. Do not pay again; refresh or contact the organizer.',
       pass.checkedIn?'Already admitted at gate':'Not checked in',pass.dateStr+' · '+pass.timeStr]){
       card.appendChild(JmuSecurityUI.textElement(document,'p',line));
@@ -616,6 +651,7 @@ let adminPassesCache=[];
     if (query) {
       list = list.filter(r =>
         (r.passId && r.passId.toLowerCase().includes(query)) ||
+        (r.ticketId && r.ticketId.toLowerCase().includes(query)) ||
         (r.name && r.name.toLowerCase().includes(query)) ||
         (r.phone && r.phone.includes(query)) ||
         (r.address && r.address.toLowerCase().includes(query)) ||
@@ -641,14 +677,14 @@ function actionButton(item,action,label){return `<button type="button" class="bu
   function statusFor(item){return item.isDeleted?'Archived':item.paymentState==='revoked'?'Refunded / Ineligible':item.paymentState==='review_required'?'Late promo payment / Review & refund':item.status==='approved'?'Verified':'Needs payment reconciliation';}
   function renderRegistrationsTable(list){
     const tbody=document.getElementById('admin-registrations-tbody');if(!tbody)return;
-    tbody.innerHTML=list.length?list.map(item=>`<tr><td>${escapeHtml(item.passId)}</td><td><strong>${escapeHtml(item.name)}</strong><div>${escapeHtml(item.partnerName||'')}</div></td>
+    tbody.innerHTML=list.length?list.map(item=>`<tr><td>${escapeHtml(visibleTicketId(item))}</td><td><strong>${escapeHtml(item.name)}</strong><div>${escapeHtml(item.partnerName||'')}</div></td>
       <td>${escapeHtml(item.category)} · ${Number(item.capacity)||0} persons · ₹${Number(item.amount)||0}</td><td>${escapeHtml(item.phone)}</td>
       <td>${statusFor(item)}</td><td>${item.checkedIn?'Admitted':'Not admitted'}</td><td><div class="admin-actions-cell">${actionsFor(item)}</div></td></tr>`).join(''):'<tr><td colspan="7">No matching attendees.</td></tr>';
   }
   function renderRegistrationsCards(list){
     const container=document.getElementById('admin-registrations-cards');if(!container)return;
     container.innerHTML=list.length?list.map(item=>`<div class="admin-attendee-card ${item.checkedIn?'admitted':''} ${item.isDeleted?'archived':''}">
-      <div class="aac-header"><span class="aac-pass-id">${escapeHtml(item.passId)}</span><span class="badge">${statusFor(item)}</span></div>
+      <div class="aac-header"><span class="aac-pass-id">${escapeHtml(visibleTicketId(item))}</span><span class="badge">${statusFor(item)}</span></div>
       <div class="aac-body"><div class="aac-name">${escapeHtml(item.name)}</div><div class="aac-partner">${escapeHtml(item.partnerName||'')}</div>
       <div class="aac-meta"><span>${escapeHtml(item.category)} · ${Number(item.capacity)||0} persons</span><span>₹${Number(item.amount)||0}</span></div>
       <div>${escapeHtml(item.phone)}</div><div>${escapeHtml(item.address)}</div><div>${item.checkedIn?'Admitted at '+escapeHtml(item.checkInTime||'gate'):'Not admitted'}</div></div>
@@ -693,7 +729,7 @@ function actionButton(item,action,label){return `<button type="button" class="bu
       box.replaceChildren();box.appendChild(JmuSecurityUI.textElement(document,'p',pass.name+' · '+pass.category+' · '+pass.capacity+' persons'));
       if(pass.status!=='approved'||pass.isDeleted){box.appendChild(JmuSecurityUI.textElement(document,'p','ENTRY DENIED: verified active ticket required'));return;}
       if(pass.checkedIn){box.appendChild(JmuSecurityUI.textElement(document,'p','ALREADY ADMITTED: duplicate entry denied'));return;}
-      const button=JmuSecurityUI.textElement(document,'button','Confirm group admission ('+pass.capacity+' persons)','button');button.type='button';button.dataset.action='checkin';button.dataset.passId=id;box.appendChild(button);
+      const button=JmuSecurityUI.textElement(document,'button','Confirm group admission ('+pass.capacity+' persons)','button');button.type='button';button.dataset.action='checkin';button.dataset.passId=pass.passId;box.appendChild(button);
     }catch(error){box.textContent='ENTRY NOT CONFIRMED: '+error.message;}
   };
   window.clearGateInput=function(){const input=document.getElementById('gate-pass-input');if(input){input.value='';input.focus();}const box=document.getElementById('gate-terminal-feedback');if(box)box.replaceChildren();};
@@ -701,7 +737,7 @@ function actionButton(item,action,label){return `<button type="button" class="bu
     try{
       const data=await adminRequest('/api/all-passes');
       const headers=['Pass ID','Payment State','Category','Persons','Amount','Attendee Name','Mobile','Address','Partner Name','Partner Mobile','Gate Entry','Check-In Time'];
-      const rows=data.passes.map(p=>[p.passId,p.paymentState,p.category,p.capacity,p.amount,p.name,p.phone,p.address,p.partnerName,p.partnerPhone,p.checkedIn?'YES':'NO',p.checkInTime||'']);
+      const rows=data.passes.map(p=>[visibleTicketId(p),p.paymentState,p.category,p.capacity,p.amount,p.name,p.phone,p.address,p.partnerName,p.partnerPhone,p.checkedIn?'YES':'NO',p.checkInTime||'']);
       const csv=[headers,...rows].map(row=>row.map(JmuSecurityUI.csvCell).join(',')).join('\r\n');
       const url=URL.createObjectURL(new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='JMU_Registrations.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch(error){showToast(error.message,'error');}

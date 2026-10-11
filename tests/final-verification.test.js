@@ -14,18 +14,22 @@ test('in-flight and ambiguous order retries cannot rotate recovery access before
       if(sql.includes('UPDATE jmu_passes SET recovery_hash'))pass.recovery_hash=values[0];
       return {rows:[]};
     }};
-    await assert.rejects(new Repository(client).prepareOrder(input,s.randomPassId(),s.hash('replacement fixture access')),error=>error.status===409&&error.code==='ORDER_RECOVERY_REQUIRED');
+    const run=()=>new Repository(client).prepareOrder(input,s.randomPassId(),s.hash('replacement fixture access'));
+    if(state==='creating')await assert.rejects(run,error=>error.status===409&&error.code==='ORDER_PREPARING');
+    else assert.equal((await run()).recover,true);
     assert.equal(pass.recovery_hash,original);
   }
 });
 
 test('every administrative mutation rejects missing CSRF and incorrect origins before changing records',async()=>{
-  const h=harness(),booking=(await h.book()).body,auth=await h.login();
+  const h=harness(),booking=(await h.book()).body;
+  assert.equal((await h.verify(booking,h.capture(booking))).code,200);
+  const auth=await h.login();
   for(const action of ['checkin','undo-checkin','delete','restore','update','recovery','reconcile']){
     const body={action,passId:booking.passId,reason:'Isolated fixture review',...(action==='update'?{data:{name:'Changed fixture'}}:{})};
     for(const headers of [{cookie:auth.cookie},{...auth,origin:'https://attacker.invalid'}])assert.equal((await h.invoke('allPasses',{headers,body})).code,403,action);
   }
-  assert.equal(h.repo.passes.get(booking.passId).name,'Fixture Attendee');assert.equal(h.repo.payments.size,0);
+  assert.equal(h.repo.passes.get(booking.passId).name,'Fixture Attendee');assert.equal(h.repo.payments.size,1);
   for(const query of [{pin:'fixture'},{password:'fixture'},{token:'fixture'}])assert.ok((await h.invoke('allPasses',{method:'GET',headers:auth,query})).code>=400);
 });
 

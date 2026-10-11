@@ -12,13 +12,14 @@ function browserFixture(fetch){
   const elements=new Map(),listeners={},storage=new Map([['jmu_registrations_v1','private legacy roster'],['jmu_my_passes','private legacy passes']]);
   const doc={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);},
     createElement(tag){return new Element(tag);},querySelector(){return new Element();},querySelectorAll(){return [];},addEventListener(type,fn){listeners[type]=fn;},body:new Element()};
-  const store={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
-  const qr=[];const context={document:doc,localStorage:store,sessionStorage:store,fetch,JmuSecurityUI:ui,JmuPricing:require('../campaign-config'),console,URL,URLSearchParams,TextEncoder,
+  const store={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},sessionEntries=new Map();
+  const sessionStore={getItem:key=>sessionEntries.get(key)||null,setItem:(key,value)=>sessionEntries.set(key,value),removeItem:key=>sessionEntries.delete(key)};
+  const qr=[];const context={document:doc,localStorage:store,sessionStorage:sessionStore,fetch,JmuSecurityUI:ui,JmuPricing:require('../campaign-config'),console,URL,URLSearchParams,TextEncoder,
     crypto:require('node:crypto').webcrypto,Uint8Array,Blob,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
     location:{hash:'',origin:'https://event.example',pathname:'/',search:''},history:{replaceState(){}},navigator:{},QRCode:{toCanvas:(canvas,text,opts,cb)=>{qr.push(text);cb(null);}},prompt:()=>null,confirm:()=>false};
   context.window=context;context.JmuCheckoutSDK={load:require('../checkout-loader').createLoader(context,doc)};
   vm.createContext(context);vm.runInContext(source,context);listeners.DOMContentLoaded();
-  return {context,doc,elements,listeners,storage,qr,Element};
+  return {context,doc,elements,listeners,storage,sessionEntries,qr,Element};
 }
 const response=data=>({ok:true,status:200,json:async()=>({success:true,...data})});
 test('Solo stepper updates quantities one through ten through delegated controls and enforces both bounds',()=>{
@@ -105,6 +106,28 @@ test('digital pass generates an ID-only QR and name text without recovery capabi
   assert.equal(browser.doc.getElementById('pass-phone-wrap').style.display,'none');assert.equal(browser.doc.getElementById('pass-addr-wrap').style.display,'none');
   assert.equal(browser.doc.getElementById('pass-code-display').textContent,attendee.passId);
 });
+test('digital pass and admin roster display short server references while QR and actions retain internal IDs',async()=>{
+  const short={...attendee,ticketId:'JMU-00012'};
+  const browser=browserFixture(async url=>response(url==='/api/admin-session'?{csrfToken:'fixture-csrf',expires:Date.now()+1800000}:{passes:[short]}));
+  browser.context.handlePaymentConfirmed(short);assert.equal(browser.doc.getElementById('pass-code-display').textContent,'JMU-00012');assert.deepEqual(browser.qr,[attendee.passId]);
+  browser.doc.getElementById('admin-pin-input').value='fixture-password';await browser.context.handleAdminLogin();
+  const table=browser.doc.getElementById('admin-registrations-tbody').innerHTML;assert.ok(table.includes('<td>JMU-00012</td>'));assert.ok(table.includes('data-pass-id="'+attendee.passId+'"'));
+});
+test('checkout details stay only in this customer tab until payment, and the callback submits the frozen original form',async()=>{
+  let checkout,verification;
+  const booking={passId:attendee.passId,recoveryToken:'a'.repeat(43),order_id:'order_detailfixture',amount:24900,currency:'INR',key_id:'fixture-key'};
+  const browser=browserFixture(async(url,options={})=>{
+    if(url==='/api/create-order')return response(booking);
+    if(url==='/api/verify-payment'){verification=JSON.parse(options.body);return response({pass:{...attendee,ticketId:'JMU-00012'}});}
+    return response({pass:{...attendee,status:'pending',paymentState:'pending',awaitingDetails:true,name:''}});
+  });
+  browser.context.Razorpay=function(options){checkout=options;this.on=()=>{};this.open=()=>{};};
+  browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';await browser.context.handleStep1Submit();
+  assert.equal(browser.sessionEntries.size,1);assert.ok(![...browser.storage.values()].some(v=>v.includes('Fixture attendee')));
+  await checkout.handler({razorpay_order_id:booking.order_id,razorpay_payment_id:'pay_detailfixture',razorpay_signature:'b'.repeat(64)});
+  assert.equal(verification.bookingDetails.name,'Fixture attendee');assert.equal(verification.bookingDetails.quantity,1);assert.match(verification.bookingDetails.idempotencyKey,/^[a-f0-9]{64}$/);
+  assert.equal(browser.sessionEntries.size,0);assert.equal(browser.doc.getElementById('pass-code-display').textContent,'JMU-00012');
+});
 test('gate UI cannot show success before server confirmation and rejects an offline admission',async()=>{
   let resolveCheckin;let gateCalled=false;const browser=browserFixture(async(url,options={})=>{
     if(url==='/api/admin-session')return response({csrfToken:'fixture-csrf',expires:Date.now()+1800000});
@@ -186,8 +209,7 @@ test('SDK errors create no order; backend errors retain their own identity and u
     let orderCalls=0;const browser=browserFixture(async()=>{orderCalls++;return {ok:false,status:503,json:async()=>({success:false,error:'Service is not configured',code:'CONFIGURATION_REQUIRED'})};});
     if(sdkFailure)browser.context.JmuCheckoutSDK.load=async()=>{const error=new Error('Secure checkout could not load. No order was created.');error.code='CHECKOUT_SDK_UNAVAILABLE';throw error;};
     else browser.context.Razorpay=function(){};
-    browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';browser.context.handleStep1Submit();
-    for(let i=0;i<20&&browser.doc.getElementById('reg-payment-feedback').hidden!==false;i++)await new Promise(setImmediate);
+    browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';await browser.context.handleStep1Submit();
     assert.equal(orderCalls,sdkFailure?0:1);assert.equal(browser.doc.getElementById('btn-proceed-pay').disabled,false);
     assert.equal(browser.doc.getElementById('reg-payment-feedback').textContent,sdkFailure?'Secure checkout could not load. No order was created.':'Service is not configured');
     browser.context.openRegistrationModal();assert.equal(browser.doc.getElementById('reg-payment-feedback').hidden,true);

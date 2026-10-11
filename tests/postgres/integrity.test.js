@@ -32,7 +32,7 @@ test('PostgreSQL migration, issuance and admission integrity', {skip:!target&&'T
     });
     await t.test('ten-person bookings verify and admit once, while SQL rejects quantities outside the limit',async()=>{
       const frozen=await booking('9',{quantity:10});assert.equal(frozen.amount_paise,249000);
-      const paid=await repo(r=>r.finalize(frozen,payment(frozen),false));assert.equal(paid.quantity,10);
+      const paid=await repo(r=>r.finalize(frozen,payment(frozen),false,null,null,input('9',{quantity:10})));assert.equal(paid.quantity,10);
       const results=await Promise.allSettled(Array.from({length:6},()=>repo(r=>r.action('fixture','checkin',frozen.pass_id))));assert.equal(results.filter(row=>row.status==='fulfilled').length,1);
       assert.ok(results.filter(row=>row.status==='rejected').every(row=>row.reason.status===409));
       const pass=(await root.query('SELECT * FROM jmu_passes WHERE pass_id=$1',[frozen.pass_id])).rows[0];
@@ -48,15 +48,40 @@ test('PostgreSQL migration, issuance and admission integrity', {skip:!target&&'T
       // manufacture another order nor rotate the first checkout's access token.
       const rows=outcomes.filter(row=>row.status==='fulfilled').map(row=>row.value);
       assert.equal(rows.length,1);assert.equal(rows[0].create,true);
-      assert.ok(outcomes.filter(row=>row.status==='rejected').every(row=>row.reason.code==='ORDER_RECOVERY_REQUIRED'));
+      assert.ok(outcomes.filter(row=>row.status==='rejected').every(row=>row.reason.code==='ORDER_PREPARING'));
       const count=await root.query('SELECT COUNT(*)::int AS n FROM jmu_orders WHERE idempotency_hash=$1',[request.keyHash]);assert.equal(count.rows[0].n,1);
+    });
+    await t.test('unpaid SQL records contain no attendee details; webhook-only evidence cannot admit; verified owner completion is atomic',async()=>{
+      const details=s.registration({category:'solo',quantity:2,name:'Privacy fixture',phone:'9999999999',address:'Local private fixture',idempotencyKey:crypto.randomBytes(32).toString('hex')});
+      const frozen=await repo(async r=>{const f=await r.prepareOrder(details,s.randomPassId(),s.hash(s.randomToken()));return r.bindOrder(f.pass_id,'order_privacyfixture');});
+      const row=await repo(r=>r.findPass(frozen.pass_id));assert.equal(row.phone,'0');assert.equal(row.name,s.PENDING_NAME);assert.equal(row.address,'');assert.equal(s.publicPass(row).ticketId,null);
+      assert.ok(!(await repo(r=>r.roster())).some(p=>p.pass_id===frozen.pass_id));
+      await root.query("CREATE FUNCTION jmu_test_pii_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture detail write failure'; END $$");
+      await root.query("CREATE TRIGGER jmu_test_pii_failure BEFORE UPDATE ON jmu_passes FOR EACH ROW WHEN (OLD.phone='0' AND NEW.phone<>'0') EXECUTE FUNCTION jmu_test_pii_failure()");
+      await assert.rejects(repo(r=>r.finalize(frozen,payment(frozen),false,null,null,details)));
+      assert.equal((await root.query('SELECT COUNT(*)::int AS n FROM jmu_payments WHERE pass_id=$1',[frozen.pass_id])).rows[0].n,0);assert.equal((await repo(r=>r.findPass(frozen.pass_id))).phone,'0');
+      await root.query('DROP TRIGGER jmu_test_pii_failure ON jmu_passes');
+      await repo(r=>r.finalize(frozen,payment(frozen),false));
+      await assert.rejects(repo(r=>r.action('fixture','checkin',frozen.pass_id)),e=>e.status===409);
+      const complete=await repo(r=>r.finalize(frozen,payment(frozen),false,null,null,details));const alias=s.ticketId(complete);assert.match(alias,/^JMU-\d{5}$/);
+      assert.equal((await repo(r=>r.findPass(alias))).pass_id,frozen.pass_id);assert.equal(complete.name,details.name);assert.equal(complete.phone,details.phone);
+      assert.ok((await repo(r=>r.roster())).some(p=>p.pass_id===frozen.pass_id));
+      const results=await Promise.allSettled(Array.from({length:5},()=>repo(r=>r.action('fixture','checkin',alias))));assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+    });
+    await t.test('explicitly rejected provider creation has a single database-backed retry claim and keeps frozen pricing',async()=>{
+      const details=s.registration({category:'solo',quantity:1,name:'Retry fixture',phone:'9999999999',idempotencyKey:crypto.randomBytes(32).toString('hex')});
+      const frozen=await repo(r=>r.prepareOrder(details,s.randomPassId(),s.hash(s.randomToken())));await repo(async r=>{await r.markUnknown(frozen.pass_id);await r.audit('system','order-create-rejected',frozen.pass_id,'400');});
+      const claims=await Promise.all(Array.from({length:8},()=>repo(r=>r.claimRejectedRetry(frozen.pass_id))));assert.equal(claims.filter(Boolean).length,1);
+      const unchanged=await repo(r=>r.findOrder(frozen.pass_id));assert.equal(unchanged.amount_paise,frozen.amount_paise);assert.equal(unchanged.request_hash,frozen.request_hash);
+      await repo(r=>r.markUnknown(frozen.pass_id));assert.equal(await repo(r=>r.claimRejectedRetry(frozen.pass_id)),false);
     });
     await t.test('row locks make simultaneous callback and webhook finalization idempotent',async()=>{
       const frozen=await booking('c',{quantity:4});const paid=await Promise.all(Array.from({length:10},()=>repo(r=>r.finalize(frozen,payment(frozen),false))));
       assert.ok(paid.every(row=>row.payment_state==='verified'));const count=await root.query('SELECT COUNT(*)::int AS n FROM jmu_payments WHERE pass_id=$1',[frozen.pass_id]);assert.equal(count.rows[0].n,1);
     });
     await t.test('admission concurrency commits exactly one group admission',async()=>{
-      const frozen=await booking('d',{category:'couple',partnerName:'Second fixture',partnerPhone:'8888888888'});await repo(r=>r.finalize(frozen,payment(frozen),false));
+      const details={category:'couple',partnerName:'Second fixture',partnerPhone:'8888888888'};
+      const frozen=await booking('d',details);await repo(r=>r.finalize(frozen,payment(frozen),false,null,null,input('d',details)));
       const outcomes=await Promise.allSettled(Array.from({length:10},()=>repo(r=>r.action('fixture','checkin',frozen.pass_id))));
       assert.equal(outcomes.filter(result=>result.status==='fulfilled').length,1);assert.ok(outcomes.filter(result=>result.status==='rejected').every(result=>result.reason.status===409));
       const row=await repo(r=>r.findPass(frozen.pass_id));assert.ok(row.check_in_at instanceof Date);assert.equal(s.publicPass(row).capacity,2);
@@ -125,15 +150,16 @@ test('PostgreSQL migration, issuance and admission integrity', {skip:!target&&'T
         await handlers[name](req,res);return res;
       }
       const body={...fixture.valid,quantity:10,idempotencyKey:'8'.repeat(64)},first=invoke('createOrder',body);await persisted;
-      try {const retry=await invoke('createOrder',body);assert.equal(retry.code,409);assert.equal(retry.body.code,'ORDER_RECOVERY_REQUIRED');} finally {release();}
+      try {const retry=await invoke('createOrder',body);assert.equal(retry.code,409);assert.equal(retry.body.code,'ORDER_PREPARING');} finally {release();}
       const created=await first;assert.equal(created.code,200);assert.equal(created.body.amount,249000);assert.equal(fixture.calls.create,1);
       const owner=await repo(r=>r.findPass(created.body.passId));assert.equal(owner.recovery_hash,s.hash(created.body.recoveryToken));assert.equal(owner.quantity,10);
       const oldPaymentId=fixture.capture(created.body),paid=fixture.paymentRows.get(oldPaymentId);fixture.paymentRows.delete(oldPaymentId);paid.id='pay_racefixture';fixture.paymentRows.set(paid.id,paid);
-      const verified=await invoke('verifyPayment',fixture.verification(created.body,paid.id),{authorization:'Bearer '+created.body.recoveryToken});
+      const verified=await invoke('verifyPayment',fixture.verification(created.body,paid.id,body),{authorization:'Bearer '+created.body.recoveryToken});
       assert.equal(verified.code,200);assert.equal(verified.body.pass.quantity,10);
     });
     await t.test('stored attacker strings are data in parameterized administrative writes',async()=>{
-      const frozen=await booking('4');const name="'); DROP TABLE jmu_passes; --";await repo(r=>r.action('fixture','update',frozen.pass_id,{name},''));assert.equal((await repo(r=>r.findPass(frozen.pass_id))).name,name);assert.ok((await root.query('SELECT COUNT(*)::int AS n FROM jmu_passes')).rows[0].n>0);
+      const frozen=await booking('4');await repo(r=>r.finalize(frozen,payment(frozen),false,null,null,input('4')));
+      const name="'); DROP TABLE jmu_passes; --";await repo(r=>r.action('fixture','update',frozen.pass_id,{name},''));assert.equal((await repo(r=>r.findPass(frozen.pass_id))).name,name);assert.ok((await root.query('SELECT COUNT(*)::int AS n FROM jmu_passes')).rows[0].n>0);
     });
     await t.test('historical approved records survive and are not treated as payment evidence',async()=>{
       await root.query("INSERT INTO jmu_passes(pass_id,category,amount,name,phone,timestamp,status) VALUES('JMU-OLD123','Solo Pass',249,'Legacy fixture','9999999999',1,'approved')");
@@ -149,7 +175,7 @@ test('PostgreSQL migration, issuance and admission integrity', {skip:!target&&'T
       const created=await invoke('createOrder',{body:{...fixture.valid,quantity:3,idempotencyKey:'5'.repeat(64)}});assert.equal(created.code,200);const ticket=created.body,paymentId=fixture.capture(ticket);
       const raw=fixture.webhookBody(ticket,paymentId);const signature=crypto.createHmac('sha256',env.RAZORPAY_WEBHOOK_SECRET).update(raw).digest('hex');
       const outcomes=await Promise.all([
-        ...Array.from({length:8},()=>invoke('verifyPayment',{body:fixture.verification(ticket,paymentId),headers:{authorization:'Bearer '+ticket.recoveryToken}})),
+        ...Array.from({length:8},()=>invoke('verifyPayment',{body:fixture.verification(ticket,paymentId,{...fixture.valid,quantity:3,idempotencyKey:'5'.repeat(64)}),headers:{authorization:'Bearer '+ticket.recoveryToken}})),
         ...Array.from({length:4},(_,index)=>invoke('webhook',{rawBody:raw,headers:{'x-razorpay-signature':signature,'x-razorpay-event-id':'evt_concurrent_'+index}}))
       ]);assert.ok(outcomes.every(result=>result.code===200));assert.equal((await root.query('SELECT COUNT(*)::int AS n FROM jmu_payments WHERE pass_id=$1',[ticket.passId])).rows[0].n,1);
       assert.equal((await root.query("SELECT COUNT(*)::int AS n FROM jmu_webhook_events WHERE event_id LIKE 'evt_concurrent_%' AND state='done'")).rows[0].n,4);

@@ -5,6 +5,7 @@ const { withDatabase } = require('./database');
 const { provider } = require('./provider');
 const payments = require('./payments');
 const pricing=require('./pricing');
+const checkout=require('./checkout');
 
 function createHandlers(options = {}) {
   const env = options.env || process.env;
@@ -37,25 +38,21 @@ function createHandlers(options = {}) {
     // Validate configuration BEFORE persisting a registration or external order.
     const keyId = s.required(env,'RAZORPAY_KEY_ID');
     s.required(env,'RAZORPAY_KEY_SECRET');
-    const input = s.registration(await jsonBody(req));
+    const body=await jsonBody(req);
+    // A bounded read-only gateway check diagnoses deployed keys without creating
+    // any registration/order. Only aggregate readiness is returned, never orders.
+    if(body?.operation==='availability'){
+      s.keys(s.object(body),['operation']);
+      return database(async repo=>{await rate(repo,req,'checkout-availability',20,60000);return checkout.availability(gateway());});
+    }
+    const input = s.registration(body);
     return database(async repo => {
       await rate(repo,req,'create-order',100,3600000);
       const recoveryToken = token();
       let frozen = await repo.prepareOrder(input,ticketId(),s.hash(recoveryToken),campaign);
-      if (frozen.create) {
-        try {
-          const created = await gateway().orders.create({ amount: frozen.amount_paise, currency: frozen.currency,
-            receipt: frozen.pass_id, partial_payment: false, notes: { registration_id: frozen.pass_id } });
-          s.providerId(created?.id,'order');
-          payments.assertOrder(created,{ ...frozen,order_id: created.id });
-          frozen = await repo.bindOrder(frozen.pass_id,created.id);
-        } catch (error) {
-          // An external create may have succeeded despite timeout. Never retry it blindly.
-          await repo.markUnknown(frozen.pass_id);
-          s.reject(503,'Booking needs organizer reconciliation before payment; do not pay again','ORDER_RECOVERY_REQUIRED');
-        }
-      }
-      if (frozen.state !== 'ready' || !frozen.order_id) s.reject(409,'Booking is being prepared or requires organizer recovery','ORDER_RECOVERY_REQUIRED');
+      if(frozen.recover)frozen=await checkout.recoverOrder(repo,gateway(),frozen,s.hash(recoveryToken));
+      if(frozen.create)frozen=await checkout.createGatewayOrder(repo,gateway(),frozen,s.hash(recoveryToken));
+      if (frozen.state !== 'ready' || !frozen.order_id) s.reject(409,'Checkout is still being prepared. Please retry shortly.','ORDER_PREPARING');
       return { passId: frozen.pass_id,recoveryToken,order_id: frozen.order_id,amount: frozen.amount_paise,
         currency: frozen.currency,key_id: keyId,pricing:pricing.quote(frozen.category,frozen.quantity,Number(frozen.promotion_units||0)),
         promotionExpiresAt:frozen.promotion_expires_at||null };
@@ -66,19 +63,25 @@ function createHandlers(options = {}) {
     s.requireOrigin(req,env);
     if (!s.bearer(req)) s.reject(401,'Ticket access required');
     const body = s.object(await jsonBody(req));
-    s.keys(body,['passId','razorpay_order_id','razorpay_payment_id','razorpay_signature']);
+    s.keys(body,['passId','razorpay_order_id','razorpay_payment_id','razorpay_signature','bookingDetails','resume']);
     const id = s.passId(body.passId);
-    const orderId = s.providerId(body.razorpay_order_id,'order');
-    const paymentId = s.providerId(body.razorpay_payment_id,'pay');
+    const resume=body.resume===true;
+    if(resume)s.keys(body,['passId','bookingDetails','resume']);
+    else if(body.resume!==undefined)s.reject(400,'Invalid confirmation request');
+    const orderId = resume?null:s.providerId(body.razorpay_order_id,'order');
+    let paymentId = resume?null:s.providerId(body.razorpay_payment_id,'pay');
     return database(async repo => {
       await rate(repo,req,'verify-payment');
       const pass = await repo.findPass(id); s.owner(req,pass);
-      const frozen = await repo.findOrder(id);
-      if (!frozen || frozen.order_id !== orderId) s.reject(409,'Payment does not match this booking','PAYMENT_MISMATCH');
-      if (!s.signature(frozen.order_id + '|' + paymentId,body.razorpay_signature,s.required(env,'RAZORPAY_KEY_SECRET'))) {
+      const frozen = await repo.findOrder(pass.pass_id);
+      if (!frozen || !frozen.order_id || (!resume&&frozen.order_id !== orderId)) s.reject(409,'Payment does not match this booking','PAYMENT_MISMATCH');
+      const details=body.bookingDetails===undefined?null:s.bookingDetails(body.bookingDetails,frozen);
+      if(s.attendeePending(pass)&&!details)s.reject(400,'Return to your booking device to complete ticket details','BOOKING_DETAILS_REQUIRED');
+      if (!resume&&!s.signature(frozen.order_id + '|' + paymentId,body.razorpay_signature,s.required(env,'RAZORPAY_KEY_SECRET'))) {
         s.reject(400,'Invalid payment signature','INVALID_SIGNATURE');
       }
-      const paid = await payments.reconcile(repo,gateway(),frozen,paymentId);
+      const api=gateway();if(resume)paymentId=await payments.paymentForOrder(api,frozen.order_id);
+      const paid = await payments.reconcile(repo,api,frozen,paymentId,null,null,details);
       if(paid.payment_state==='review_required')s.reject(409,'Promotional payment arrived after its reservation expired. Organizer review/refund is required; do not pay again.','PROMOTION_EXPIRED');
       if (paid.payment_state !== 'verified' || paid.is_deleted) s.reject(409,'Ticket is not eligible for admission','TICKET_INELIGIBLE');
       return { pass: s.publicPass(paid) };
@@ -147,7 +150,8 @@ function createHandlers(options = {}) {
           partnerPhone: row.partner_phone || '',paymentMethod: row.payment_method,
           razorpayOrderId: row.razorpay_order_id,razorpayPaymentId: row.razorpay_payment_id })) };
       }
-      const id = s.passId(body.passId), action = body.action;
+      const requestedId=s.passId(body.passId),target=await repo.findPass(requestedId);
+      const id=target?.pass_id||requestedId, action = body.action;
       if (!['checkin','undo-checkin','delete','restore','update','recovery','reconcile'].includes(action)) s.reject(400,'Unsupported administrative action');
       const reason = s.text(body.reason,'reason',200,!['undo-checkin','recovery','reconcile'].includes(action));
       if (action === 'reconcile') {

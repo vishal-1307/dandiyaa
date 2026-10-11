@@ -45,14 +45,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Milan Utsav">
 
-  <link rel="stylesheet" href="styles-v2.css?v=4">
+  <link rel="stylesheet" href="styles-v2.css?v=5">
   <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
   <script src="qrcode.bundle.js" defer></script>
   <script src="html2canvas.bundle.js" defer></script>
-  <script src="campaign-config.js?v=4" defer></script>
-  <script src="security-ui.js?v=4" defer></script>
-  <script src="checkout-loader.js?v=4" defer></script>
-  <script src="app.js?v=4" defer></script>
+  <script src="campaign-config.js?v=5" defer></script>
+  <script src="security-ui.js?v=5" defer></script>
+  <script src="checkout-loader.js?v=5" defer></script>
+  <script src="app.js?v=5" defer></script>
 
   <!-- JSON-LD Structured Data: Event Schema & Organization Schema -->
   <script type="application/ld+json">
@@ -939,13 +939,13 @@
 
       <div class="modal-content">
         <p style="font-size:14px; color:var(--muted); margin-bottom:14px;">
-          Apna official <strong>Ticket ID / Pass ID</strong> enter karein (e.g. <code>JMU-7K29</code>):
+          Apna official <strong>Ticket ID / Pass ID</strong> enter karein (e.g. <code>JMU-00012</code>):
         </p>
 
         <form class="lookup-form" data-ui-event="submit" data-ui-handler="handleMyPassSearch" data-ui-args="[&quot;__event__&quot;]">
           <label for="mypass-recovery-token">Organizer recovery code (only if this device has no saved booking)</label>
           <input type="password" id="mypass-recovery-token" class="form-control" autocomplete="off" maxlength="43" placeholder="Private recovery code">
-          <input type="text" id="mypass-search-input" class="form-control" placeholder="Enter Ticket ID (e.g. JMU-7K29)" required autocomplete="off" autocapitalize="characters">
+          <input type="text" id="mypass-search-input" class="form-control" placeholder="Enter Ticket ID (e.g. JMU-00012)" required autocomplete="off" autocapitalize="characters">
           <button type="submit" class="button small">Search Pass</button>
         </form>
 
@@ -1023,7 +1023,7 @@
             </div>
             <form data-ui-event="submit" data-ui-handler="handleGateTerminalSubmit" data-ui-args="[&quot;__event__&quot;]" style="display:flex; gap:10px; flex-wrap:wrap;">
               <div style="flex:1; min-width:240px; position:relative;">
-                <input type="text" id="gate-pass-input" class="form-control" placeholder="Type or Paste Pass ID (e.g. JMU-XR7DP)" autocomplete="off" autocapitalize="characters" style="font-size:16px; font-weight:700; letter-spacing:0.05em; padding-right:36px;">
+                <input type="text" id="gate-pass-input" class="form-control" placeholder="Type or Paste Pass ID (e.g. JMU-00012)" autocomplete="off" autocapitalize="characters" style="font-size:16px; font-weight:700; letter-spacing:0.05em; padding-right:36px;">
                 <button type="button" data-ui-event="click" data-ui-handler="clearGateInput" data-ui-args="[]" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--muted); font-size:18px; cursor:pointer;" aria-label="Clear input">✕</button>
               </div>
               <button type="submit" class="button" style="padding:10px 20px; font-weight:700; white-space:nowrap;">

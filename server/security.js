@@ -17,6 +17,20 @@ const reject = (status, message, code) => { throw new HttpError(status, message,
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const randomToken = () => crypto.randomBytes(32).toString('base64url');
 const randomPassId = () => 'JMU-' + crypto.randomBytes(16).toString('hex').toUpperCase();
+const PENDING_NAME = 'Awaiting payment confirmation';
+const attendeePending = row => row?.phone === '0';
+function ticketId(row) {
+  // The database sequence is a unique human reference, NOT an access capability.
+  // Keep the random internal ID for order associations and existing QR payloads.
+  if (attendeePending(row) || !['verified','revoked'].includes(row?.payment_state)) return null;
+  return Number.isSafeInteger(row.id) && row.id > 0 && row.id <= 99999 ?
+    'JMU-' + String(row.id).padStart(5,'0') : row.pass_id;
+}
+function bookingDetails(body, frozen) {
+  const input = registration(body);
+  if (hash(JSON.stringify(input)) !== frozen.request_hash) reject(409,'Booking details do not match the original checkout','BOOKING_DETAILS_MISMATCH');
+  return input;
+}
 function equal(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const x = Buffer.from(a), y = Buffer.from(b);
@@ -139,8 +153,10 @@ function clientKey(req, env) {
   return hash(typeof source === 'string' ? source.slice(0, 128) : 'unknown-client');
 }
 function publicPass(row) {
-  const isVerified = row.payment_state === 'verified' && !row.is_deleted;
-  return { passId: row.pass_id, name: row.name, partnerName: row.partner_name || '',
+  const pending = attendeePending(row);
+  const isVerified = row.payment_state === 'verified' && !row.is_deleted && !pending;
+  return { passId: row.pass_id, ticketId: ticketId(row), awaitingDetails: pending,
+    name: pending ? '' : row.name, partnerName: pending ? '' : row.partner_name || '',
     category: row.category, quantity: Number(row.quantity), capacity: row.category_key === 'couple' || row.category.includes('Couple') ? 2 : Number(row.quantity),
     amount: Number(row.amount), status: isVerified ? 'approved' : 'pending', paymentState: row.payment_state,
     promotionalQuantity:Number(row.promotion_units||0),regularQuantity:Number(row.quantity)-Number(row.promotion_units||0),
@@ -149,6 +165,6 @@ function publicPass(row) {
     timestamp: Number(row.timestamp), dateStr: '19 October 2026', timeStr: '6:00–10:00 PM',
     venue: 'Marwadi Vivah Bhavan, Jaynagar', organizer: 'Motion Arts Academy' };
 }
-module.exports = { SCRYPT_OPTIONS, HttpError, reject, hash, randomToken, randomPassId, equal, required, appOrigin, requireOrigin,
+module.exports = { PENDING_NAME, attendeePending, ticketId, bookingDetails, SCRYPT_OPTIONS, HttpError, reject, hash, randomToken, randomPassId, equal, required, appOrigin, requireOrigin,
   object, keys, text, phone, pricing, registration, passId, providerId, bearer, owner, signature,
   signedSession, csrfFor, decodeSession, cookie, passwordMatches, clientKey, publicPass };

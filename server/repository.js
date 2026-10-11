@@ -9,7 +9,13 @@ class Repository {
     try { const result = await run(); await this.client.query('COMMIT'); return result; }
     catch (error) { await this.client.query('ROLLBACK'); throw error; }
   }
-  async findPass(id) { return (await this.query('SELECT * FROM jmu_passes WHERE UPPER(pass_id)=$1', [id]))[0]; }
+  async findPass(id) {
+    const short = /^JMU-\d{5}$/.test(id) ? Number(id.slice(4)) : null;
+    const rows = short === null ? await this.query('SELECT * FROM jmu_passes WHERE UPPER(pass_id)=$1',[id]) :
+      await this.query('SELECT * FROM jmu_passes WHERE UPPER(pass_id)=$1 OR id=$2',[id,short]);
+    if(rows.length > 1) s.reject(409,'Ticket reference requires review','TICKET_REFERENCE_CONFLICT');
+    return rows[0];
+  }
   async findOrder(id) { return (await this.query('SELECT * FROM jmu_orders WHERE UPPER(pass_id)=$1', [id]))[0]; }
   async findByOrder(id) { return (await this.query('SELECT * FROM jmu_orders WHERE order_id=$1', [id]))[0]; }
   async lockCampaign(key){
@@ -45,12 +51,13 @@ class Repository {
         if(previous.promotion_key)await this.lockCampaign(previous.promotion_key);
         const [pass]=await this.query('SELECT * FROM jmu_passes WHERE pass_id=$1 FOR UPDATE', [previous.pass_id]);
         if (previous.request_hash !== requestHash) s.reject(409, 'Booking key was used for different details');
-        if (previous.state !== 'ready' || !previous.order_id) s.reject(409,
-          'Booking is being prepared or requires organizer recovery', 'ORDER_RECOVERY_REQUIRED');
         if(previous.promotion_units>0 && pass.payment_state!=='verified'){
           const [reservation]=await this.query('SELECT *,expires_at>clock_timestamp() AS active FROM jmu_promotion_reservations WHERE pass_id=$1',[pass.pass_id]);
           if(!reservation||reservation.state!=='reserved'||!reservation.active)s.reject(409,'Early-bird reservation expired. If you paid, contact the organizer; do not pay again.','PROMOTION_EXPIRED');
         }
+        if (previous.state === 'unknown' && !previous.order_id) return { ...previous, create:false, recover:true };
+        if (previous.state !== 'ready' || !previous.order_id) s.reject(409,
+          'Checkout is still being prepared. Please retry in a moment.', 'ORDER_PREPARING');
         // The 256-bit booking key is a capability. A retry rotates recovery access,
         // so no plaintext recovery token must be stored in PostgreSQL.
         await this.query('UPDATE jmu_passes SET recovery_hash=$1 WHERE pass_id=$2', [recoveryHash, previous.pass_id]);
@@ -65,8 +72,8 @@ class Repository {
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'19 October 2026','6:00–10:00 PM',
          'Marwadi Vivah Bhavan, Jaynagar','Motion Arts Academy',$11,FALSE,'pending','razorpay','pending',$12,$13,$14,$15)`,
         [passId, input.category === 'couple' ? 'Married Couple Pass' : 'Solo Pass', input.category,
-         applicable.amountPaise / 100, input.name, input.phone, input.address, input.partnerName || null,
-         input.partnerPhone || null, Date.now(), input.quantity, recoveryHash,promotion.key,promotion.units,promotion.expires]);
+         applicable.amountPaise / 100, s.PENDING_NAME, '0', '', null,
+         null, Date.now(), input.quantity, recoveryHash,promotion.key,promotion.units,promotion.expires]);
       const [order] = await this.query(`INSERT INTO jmu_orders
         (pass_id,idempotency_hash,request_hash,category,quantity,amount_paise,currency,promotion_key,promotion_units,promotion_expires_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
@@ -82,6 +89,19 @@ class Repository {
     return rows[0];
   }
   async markUnknown(id) { await this.query("UPDATE jmu_orders SET state='unknown' WHERE pass_id=$1 AND order_id IS NULL", [id]); }
+  async rotateRecovery(id,recoveryHash) { await this.query('UPDATE jmu_passes SET recovery_hash=$1 WHERE pass_id=$2',[recoveryHash,id]); }
+  async claimRejectedRetry(id) {
+    return this.transaction(async()=>{
+      const [order]=await this.query('SELECT * FROM jmu_orders WHERE pass_id=$1 FOR UPDATE',[id]);
+      if(order?.state!=='unknown'||order.order_id)return false;
+      const [last]=await this.query("SELECT action FROM jmu_audit WHERE pass_id=$1 AND action IN ('order-create-rejected','order-create-retry') ORDER BY id DESC LIMIT 1",[id]);
+      if(last?.action!=='order-create-rejected')return false;
+      await this.query("UPDATE jmu_orders SET state='creating' WHERE pass_id=$1",[id]);
+      // Consume the proof: an interrupted new attempt is ambiguous, not safely retryable.
+      await this.audit('system','order-create-retry',id);
+      return true;
+    });
+  }
   async installLegacyOrder(pass, order) {
     const category = pass.category.includes('Couple') ? 'couple' : pass.category.startsWith('Solo Pass') ? 'solo' : '';
     const price = s.pricing(category, Number(pass.quantity));
@@ -100,7 +120,7 @@ class Repository {
       return frozen;
     });
   }
-  async finalize(frozen, payment, revoked, eventId = null, audit = null) {
+  async finalize(frozen, payment, revoked, eventId = null, audit = null, details = null) {
     return this.transaction(async () => {
       if(frozen.promotion_key)await this.lockCampaign(frozen.promotion_key);
       const [pass] = await this.query('SELECT * FROM jmu_passes WHERE pass_id=$1 FOR UPDATE', [frozen.pass_id]);
@@ -125,6 +145,11 @@ class Repository {
           evidence.amount_paise !== order.amount_paise || evidence.currency !== order.currency) s.reject(409, 'Payment is already associated with another booking');
       if(evidence.state==='revoked')state='revoked';else if(evidence.state==='review_required'&&state!=='revoked')state='review_required';
       if(evidence.state!==state)await this.query('UPDATE jmu_payments SET state=$1 WHERE payment_id=$2',[state,payment.id]);
+      if(details && s.hash(JSON.stringify(details))!==order.request_hash)s.reject(409,'Booking details do not match the original checkout','BOOKING_DETAILS_MISMATCH');
+      // Personal details are materialized only after trusted captured-payment evidence.
+      // A webhook may record payment first; the owner callback/resume completes the record.
+      if(details && s.attendeePending(pass))await this.query(`UPDATE jmu_passes SET name=$1,phone=$2,address=$3,partner_name=$4,partner_phone=$5 WHERE pass_id=$6`,
+        [details.name,details.phone,details.address,details.partnerName||null,details.partnerPhone||null,pass.pass_id]);
       const [result] = await this.query(`UPDATE jmu_passes SET payment_state=$1,status=$2,
         razorpay_order_id=$3,razorpay_payment_id=$4,payment_method='razorpay'
         WHERE pass_id=$5 RETURNING *`, [state,state === 'verified' ? 'approved' : 'pending',order.order_id,payment.id,pass.pass_id]);
@@ -152,7 +177,7 @@ class Repository {
   async audit(actor, action, id = null, reason = '') {
     await this.query('INSERT INTO jmu_audit(actor_hash,action,pass_id,reason) VALUES($1,$2,$3,$4)', [actor,action,id,reason]);
   }
-  async roster() { return this.query('SELECT * FROM jmu_passes ORDER BY timestamp DESC'); }
+  async roster() { return this.query("SELECT * FROM jmu_passes WHERE phone<>'0' AND payment_state<>'pending' ORDER BY timestamp DESC"); }
   async hasPendingRefund(orderId,paymentId) {
     const [row]=await this.query(`SELECT EXISTS(SELECT 1 FROM jmu_webhook_events
       WHERE order_id=$1 AND payment_id=$2 AND event_type='refund.processed' AND state<>'done') AS pending`,[orderId,paymentId]);
@@ -160,12 +185,13 @@ class Repository {
   }
   async action(actor, action, id, data = {}, reason = '') {
     return this.transaction(async () => {
-      const [pass] = await this.query('SELECT * FROM jmu_passes WHERE UPPER(pass_id)=$1 FOR UPDATE', [id]);
+      const resolved=await this.findPass(id);
+      const [pass] = resolved ? await this.query('SELECT * FROM jmu_passes WHERE pass_id=$1 FOR UPDATE', [resolved.pass_id]) : [];
       if (!pass) s.reject(404, 'Ticket not found');
       let rows;
       if (action === 'checkin') {
         rows = await this.query(`UPDATE jmu_passes p SET checked_in=TRUE,check_in_at=CURRENT_TIMESTAMP,check_in_time=NULL
-          WHERE p.pass_id=$1 AND p.checked_in IS NOT TRUE AND p.is_deleted IS NOT TRUE AND p.payment_state='verified'
+          WHERE p.pass_id=$1 AND p.phone<>'0' AND p.checked_in IS NOT TRUE AND p.is_deleted IS NOT TRUE AND p.payment_state='verified'
           AND EXISTS (SELECT 1 FROM jmu_payments m JOIN jmu_orders o ON o.order_id=m.order_id AND o.pass_id=m.pass_id
             WHERE m.pass_id=p.pass_id AND m.state='verified' AND m.amount_paise=o.amount_paise AND m.currency=o.currency)
           AND NOT EXISTS (SELECT 1 FROM jmu_webhook_events e WHERE e.order_id=p.razorpay_order_id
@@ -179,6 +205,7 @@ class Repository {
       } else if (action === 'recovery') {
         rows = await this.query('UPDATE jmu_passes SET recovery_hash=$1 WHERE pass_id=$2 RETURNING *', [data.recoveryHash,pass.pass_id]);
       } else if (action === 'update') {
+        if(s.attendeePending(pass))s.reject(409,'Complete verified booking details on the booking device first','BOOKING_DETAILS_REQUIRED');
         rows = await this.query(`UPDATE jmu_passes SET name=COALESCE($1,name),phone=COALESCE($2,phone),address=COALESCE($3,address)
           WHERE pass_id=$4 RETURNING *`, [data.name ?? null,data.phone ?? null,data.address ?? null,pass.pass_id]);
       } else s.reject(400, 'Unsupported administrative action');

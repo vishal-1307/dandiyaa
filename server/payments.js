@@ -25,7 +25,7 @@ function validatePayment(order, payment, frozen, paymentId) {
   }
   return revoked;
 }
-async function reconcile(repo, provider, frozen, paymentId, eventId = null, audit = null) {
+async function reconcile(repo, provider, frozen, paymentId, eventId = null, audit = null, details = null) {
   const [order,payment] = await Promise.all([provider.orders.fetch(frozen.order_id),provider.payments.fetch(paymentId)]);
   const revoked = validatePayment(order,payment,frozen,paymentId);
   // A signed refund notification must not be consumed against a stale provider
@@ -34,7 +34,7 @@ async function reconcile(repo, provider, frozen, paymentId, eventId = null, audi
   if(!revoked&&await repo.hasPendingRefund(frozen.order_id,paymentId)) {
     s.reject(503,'Refund evidence is still being reconciled; retry confirmation later','PAYMENT_RECONCILIATION_PENDING');
   }
-  return repo.finalize(frozen,payment,revoked,eventId,audit);
+  return repo.finalize(frozen,payment,revoked,eventId,audit,details);
 }
 async function paymentForOrder(provider, orderId) {
   const list = await provider.orders.fetchPayments(orderId);
