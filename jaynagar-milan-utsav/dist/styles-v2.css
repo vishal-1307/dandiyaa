@@ -1888,6 +1888,18 @@ footer {
   padding: 20px;
 }
 
+.lookup-pass-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.lookup-pass-actions .button {
+  min-height: 48px;
+  flex: 1 1 150px;
+}
+
 .lookup-pass-header {
   display: flex;
   align-items: center;

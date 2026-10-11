@@ -12,11 +12,11 @@ const DEFAULT_CONFIG = {
     eventDate: 'Monday, 19 October 2026', eventTime: '6:00 PM – 10:00 PM',
     eventTimestamp: new Date('2026-10-19T18:00:00+05:30').getTime(),
     venue: 'Marwadi Vivah Bhavan, Jaynagar', organizer: 'Motion Arts Academy',
-    whatsappNumber: '917050551310', whatsappGroupLink: 'https://chat.whatsapp.com/invite',
+    whatsappNumber: '917050551310', whatsappGroupLink: 'https://chat.whatsapp.com/FJt21SRONmx3cnrgsd2QK0?s=sh&p=a&mlu=4&ilr=4&iam=0',
     pricing: { solo: JmuPricing.CATALOG.solo/100, couple: JmuPricing.CATALOG.couple/100 }
   };
   function safeGroup(value) {
-    try { const url=new URL(value); return url.protocol==='https:' && url.hostname==='chat.whatsapp.com' && !url.username && !url.password ? url.href : null; } catch { return null; }
+    try { const url=new URL(value); return url.protocol==='https:' && url.hostname==='chat.whatsapp.com' && !url.username && !url.password && /^\/[A-Za-z0-9]{16,64}\/?$/.test(url.pathname) ? url.href : null; } catch { return null; }
   }
   function getConfig() {
     try {
@@ -156,13 +156,13 @@ function getMyPasses() {
     } catch { return []; }
   }
   function saveOwnerAccess(passId,recoveryToken,ticketId=null) {
-    const entries=getMyPasses().filter(p=>p.passId!==passId);
+    const entries=getMyPasses().filter(p=>p.passId!==passId&&(!ticketId||(p.passId!==ticketId&&p.ticketId!==ticketId)));
     entries.unshift({passId,recoveryToken,...(ticketId?{ticketId}:{})});
     localStorage.setItem('jmu_owner_tokens_v2',JSON.stringify(entries.slice(0,20)));
   }
   function ownerOptions(passId) {
     const access=getMyPasses().find(p=>p.passId===passId||p.ticketId===passId);
-    if (!access) throw new Error('Ask the organizer for a secure recovery link for this ticket');
+    if (!access) throw new Error('Ask the organizer for a private recovery link for this ticket');
     return { headers: { Authorization:'Bearer '+access.recoveryToken } };
   }
   const visibleTicketId = pass => pass.ticketId || (pass.status==='approved' ? pass.passId : 'Payment confirmation pending');
@@ -455,13 +455,13 @@ function renderStep3Pass(pass) {
     for(const [id,value] of Object.entries(values)){const element=document.getElementById(id);if(element)element.textContent=value||'';}
     const partner=document.getElementById('pass-partner-wrap');if(partner)partner.style.display=pass.partnerName?'block':'none';
     for(const id of ['pass-phone-wrap','pass-addr-wrap']){const element=document.getElementById(id);if(element)element.style.display='none';}
-    const approved=pass.status==='approved'&&!pass.isDeleted;
+    const approved=pass.status==='approved'&&!pass.isDeleted&&!pass.awaitingDetails;
     const status=document.querySelector('.plaque-sub');if(status)status.textContent=approved?'✓ Verified Entry Pass':'Confirmation required';
     const badge=document.getElementById('pass-payment-status');if(badge)badge.textContent=approved?'✓ Payment Verified':'Not eligible for admission';
     const canvas=document.getElementById('pass-ticket-qr');
     if(canvas && approved && window.QRCode) window.QRCode.toCanvas(canvas,pass.passId,{width:164,margin:2,errorCorrectionLevel:'M'},error=>{if(error)showToast('Could not render QR; use the Ticket ID at the gate','error');});
     const link=document.getElementById('btn-join-whatsapp-group');const group=safeGroup(getConfig().whatsappGroupLink);
-    if(link && group)link.href=group;
+    if(link){link.hidden=!approved||!group;link.style.display=approved&&group?'flex':'none';if(approved&&group)link.href=group;else link.removeAttribute('href');}
   }
 
   // Copy Pass ID
@@ -479,14 +479,14 @@ function renderStep3Pass(pass) {
 
   // Download Pass as Image via html2canvas
   window.downloadPassAsImage = function () {
-    if(!wizardState.currentPass||wizardState.currentPass.status!=='approved'||wizardState.currentPass.awaitingDetails){showToast('Complete verified payment before downloading a ticket','error');return;}
+    if(!wizardState.currentPass||wizardState.currentPass.status!=='approved'||wizardState.currentPass.isDeleted||wizardState.currentPass.awaitingDetails){showToast('Complete verified payment before downloading a ticket','error');return;}
     const passCard = document.getElementById('digital-pass-card');
     if (!passCard) return;
 
     showToast('Generating high-res Pass image...', 'info');
 
     if (window.html2canvas) {
-      window.html2canvas(passCard, {
+      return window.html2canvas(passCard, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#111714',
@@ -506,38 +506,40 @@ function renderStep3Pass(pass) {
     }
   };
 
-window.openMyPassModal=async function(){
+  async function retrieveOwnPass(id){
+    const access=getMyPasses().find(p=>p.passId===id||p.ticketId===id);
+    let data=await apiRequest('/api/get-pass?id='+encodeURIComponent(id),ownerOptions(id));
+    const details=pendingDetails(data.pass.passId);
+    if(data.pass.awaitingDetails&&details&&['pending','verified'].includes(data.pass.paymentState)){
+      try{data=await apiRequest('/api/verify-payment',{
+        method:'POST',headers:{'Content-Type':'application/json',...ownerOptions(id).headers},
+        body:JSON.stringify({passId:data.pass.passId,resume:true,bookingDetails:details})});}
+      catch(error){if(error.code!=='PAYMENT_PENDING')throw error;}
+    }
+    if(access)saveOwnerAccess(data.pass.passId,access.recoveryToken,data.pass.ticketId);
+    if(data.pass.status==='approved'&&!data.pass.awaitingDetails)sessionStorage.removeItem('jmu_pending_details_v1:'+data.pass.passId);
+    return data.pass;
+  }
+window.openMyPassModal=async function(preferredId=null){
     document.getElementById('mypass-modal')?.classList.add('active');document.body.classList.add('modal-open');
-    const entries=getMyPasses(),saved=entries.find(p=>p.ticketId);const input=document.getElementById('mypass-search-input');if(input)input.value=saved?.ticketId||'';
-    const results=document.getElementById('mypass-results');if(results)results.textContent='Enter your Ticket ID. This device needs its saved booking access or an organizer recovery link.';
-    if(!saved&&entries[0])try{
-      let data=await apiRequest('/api/get-pass?id='+encodeURIComponent(entries[0].passId),ownerOptions(entries[0].passId));
-      const details=pendingDetails(data.pass.passId);
-      if(data.pass.awaitingDetails&&data.pass.paymentState==='verified'&&details)data=await apiRequest('/api/verify-payment',{
-        method:'POST',headers:{'Content-Type':'application/json',...ownerOptions(data.pass.passId).headers},body:JSON.stringify({passId:data.pass.passId,resume:true,bookingDetails:details})});
-      if(data.pass.ticketId){saveOwnerAccess(data.pass.passId,entries[0].recoveryToken,data.pass.ticketId);if(input)input.value=data.pass.ticketId;}
-      renderLookupResult(data.pass);
+    const entries=getMyPasses(),saved=(preferredId?entries.find(p=>p.passId===preferredId||p.ticketId===preferredId):null)||entries.find(p=>p.ticketId)||entries[0];
+    const input=document.getElementById('mypass-search-input');if(input)input.value=saved?.ticketId||(preferredId||'');
+    const results=document.getElementById('mypass-results');if(results)results.textContent=saved?'Checking your saved ticket...':'Use the same booking browser to find your ticket. On another device, contact the organizer for a private recovery link.';
+    if(saved)try{
+      const pass=await retrieveOwnPass(saved.passId);
+      if(pass.ticketId&&input)input.value=pass.ticketId;
+      renderLookupResult(pass);
     }catch(error){if(results)results.textContent=error.message;}
   };
   window.closeMyPassModal=function(){document.getElementById('mypass-modal')?.classList.remove('active');document.body.classList.remove('modal-open');};
   window.handleMyPassSearch=async function(event){
     event?.preventDefault();
     const id=(document.getElementById('mypass-search-input')?.value||'').trim().toUpperCase();
-    const recovery=(document.getElementById('mypass-recovery-token')?.value||'').trim();
     const results=document.getElementById('mypass-results');
     try {
       if(!/^JMU-[A-Z0-9]{4,60}$/.test(id))throw new Error('Enter a valid Ticket ID');
-      if(recovery){if(!/^[A-Za-z0-9_-]{43}$/.test(recovery))throw new Error('Enter the recovery code supplied by the organizer');saveOwnerAccess(id,recovery);}
       if(results)results.textContent='Checking the official ticket record...';
-      let data=await apiRequest('/api/get-pass?id='+encodeURIComponent(id),ownerOptions(id));
-      const access=getMyPasses().find(p=>p.passId===id||p.ticketId===id);
-      if(access)saveOwnerAccess(data.pass.passId,access.recoveryToken,data.pass.ticketId);
-      if(data.pass.awaitingDetails&&data.pass.paymentState==='verified'){
-        const details=pendingDetails(data.pass.passId);
-        if(details)data=await apiRequest('/api/verify-payment',{method:'POST',headers:{'Content-Type':'application/json',...ownerOptions(data.pass.passId).headers},
-          body:JSON.stringify({passId:data.pass.passId,resume:true,bookingDetails:details})});
-      }
-      renderLookupResult(data.pass);
+      renderLookupResult(await retrieveOwnPass(id));
     }catch(error){if(results)results.textContent=error.message;showToast(error.message,'error');}
   };
   function renderLookupResult(pass){
@@ -547,11 +549,22 @@ window.openMyPassModal=async function(){
     for(const line of [visibleTicketId(pass),pass.name,pass.category+' · '+pass.capacity+' persons · ₹'+pass.amount,
       pass.isDeleted?'Ticket archived':pass.status==='approved'?'Payment verified':pass.awaitingDetails&&pass.paymentState==='verified'?
         'Payment verified. Return to the same booking form to finish your original ticket details.':pass.paymentState==='review_required'?
-        'Promotional reservation expired. Payment requires organizer review/refund; this ticket cannot be admitted. Do not pay again.':'Confirmation pending. Do not pay again; refresh or contact the organizer.',
+        'Promotional reservation expired. Payment requires organizer review/refund; this ticket cannot be admitted. Do not pay again.':'Your ticket will appear after payment is verified. If already debited, do not pay again; refresh My Pass.',
       pass.checkedIn?'Already admitted at gate':'Not checked in',pass.dateStr+' · '+pass.timeStr]){
       card.appendChild(JmuSecurityUI.textElement(document,'p',line));
     }
-    if(pass.status==='approved'&&!pass.isDeleted){const button=JmuSecurityUI.textElement(document,'button','Show Digital Pass','button small');button.type='button';button.addEventListener('click',()=>{closeMyPassModal();openRegistrationModal(pass.category.includes('Couple')?'couple':'solo');handlePaymentConfirmed(pass);});card.appendChild(button);}
+    if(pass.status==='approved'&&!pass.isDeleted&&!pass.awaitingDetails){
+      const actions=document.createElement('div');actions.className='lookup-pass-actions';
+      for(const [label,download] of [['Show Digital Pass',false],['Download Ticket',true]]){
+        const button=JmuSecurityUI.textElement(document,'button',label,'button small');button.type='button';
+        button.addEventListener('click',()=>{
+          if(checkoutBusy){showToast('Close the active payment window before opening this ticket');return;}
+          closeMyPassModal();openRegistrationModal(pass.category.includes('Couple')?'couple':'solo');handlePaymentConfirmed(pass);
+          if(download)return downloadPassAsImage();
+        });actions.appendChild(button);
+      }
+      card.appendChild(actions);
+    }
     container.appendChild(card);
   }
 
@@ -768,8 +781,8 @@ document.addEventListener('DOMContentLoaded',function(){
     const fragment=new URLSearchParams(location.hash.slice(1));
     if(fragment.has('access')){
       const id=(fragment.get('pass')||'').toUpperCase(),access=fragment.get('access')||'';
-      if(/^JMU-[A-Z0-9]{4,60}$/.test(id)&&/^[A-Za-z0-9_-]{43}$/.test(access)){saveOwnerAccess(id,access);openMyPassModal();const input=document.getElementById('mypass-search-input');if(input)input.value=id;handleMyPassSearch();}
       history.replaceState(null,'',location.pathname+location.search);
+      if(/^JMU-[A-Z0-9]{4,60}$/.test(id)&&/^[A-Za-z0-9_-]{43}$/.test(access)){saveOwnerAccess(id,access);openMyPassModal(id);}
     }
     if(location.hash==='#admin')openAdminModal();
   });

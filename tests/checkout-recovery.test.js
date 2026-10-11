@@ -35,6 +35,34 @@ test('webhook-first payment cannot admit or disclose an unfinished attendee; own
   assert.equal(completed.code,200);assert.equal(completed.body.pass.name,h.valid.name);assert.match(completed.body.pass.ticketId,/^JMU-\d{5}$/);
   assert.equal(h.repo.payments.size,1);assert.equal(h.calls.create,1);
 });
+
+test('captured payment can resume before callback or webhook; repeated owner resumes keep the same stored ticket and payment',async()=>{
+  const h=harness(),booking=(await h.book()).body;
+  h.capture(booking);assert.equal(h.repo.passes.get(booking.passId).payment_state,'pending');
+  const request={headers:{authorization:'Bearer '+booking.recoveryToken},body:{passId:booking.passId,resume:true,bookingDetails:h.valid}};
+  for(let i=0;i<3;i++){
+    const result=await h.invoke('verifyPayment',request);assert.equal(result.code,200);
+    assert.equal(result.body.pass.ticketId,'JMU-00001');assert.equal(result.body.pass.passId,booking.passId);
+    assert.equal(result.body.pass.name,h.valid.name);
+  }
+  assert.equal(h.repo.payments.size,1);assert.equal(h.calls.create,1);assert.equal((await h.repo.roster()).length,1);
+});
+
+test('unpaid owner resume is explicitly PAYMENT_PENDING and persists neither PII nor an issued ticket',async()=>{
+  const h=harness(),booking=(await h.book()).body;
+  const result=await h.invoke('verifyPayment',{headers:{authorization:'Bearer '+booking.recoveryToken},body:{passId:booking.passId,resume:true,bookingDetails:h.valid}});
+  assert.equal(result.code,409);assert.equal(result.body.code,'PAYMENT_PENDING');assert.ok(!/organizer/i.test(result.body.error));
+  const row=h.repo.passes.get(booking.passId);assert.equal(row.phone,'0');assert.equal(row.name,s.PENDING_NAME);assert.equal(s.publicPass(row).ticketId,null);
+  assert.equal(h.repo.payments.size,0);assert.equal((await h.repo.roster()).length,0);
+});
+
+test('malformed or ambiguous provider payment lists fail closed during owner resume',async()=>{
+  for(const list of [{},{items:null},{items:[null]},{items:[{id:'pay_one',status:'captured'},{id:'pay_two',status:'captured'}]}]){
+    const h=harness(),booking=(await h.book()).body;h.provider.orders.fetchPayments=async()=>list;
+    const result=await h.invoke('verifyPayment',{headers:{authorization:'Bearer '+booking.recoveryToken},body:{passId:booking.passId,resume:true,bookingDetails:h.valid}});
+    assert.ok([409,503].includes(result.code));assert.equal(h.repo.payments.size,0);assert.equal(h.repo.passes.get(booking.passId).phone,'0');
+  }
+});
 test('resume cannot approve unpaid, mismatched or refunded provider evidence',async()=>{
   for(const state of ['unpaid','wrong-amount','refunded']){
     const h=harness(),booking=(await h.book()).body;

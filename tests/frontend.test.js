@@ -3,23 +3,25 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const ui=require('../security-ui');
 const source=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
-function browserFixture(fetch){
+function browserFixture(fetch,options={}){
+  const clicks=[],history=[];
   class Element{
     constructor(tag='div'){this.tagName=tag.toUpperCase();this.textContent='';this.innerHTML='';this.value='';this.disabled=false;this.style={};this.dataset={};this.children=[];this.listeners={};this.classList={add(){},remove(){},toggle(){}};}
     appendChild(child){this.children.push(child);return child;}replaceChildren(...children){this.children=children;this.textContent='';}
-    addEventListener(type,handler){this.listeners[type]=handler;}contains(child){return this.children.includes(child);}closest(){return this;}focus(){}click(){}remove(){}
+    addEventListener(type,handler){this.listeners[type]=handler;}contains(child){return this.children.includes(child);}closest(){return this;}focus(){}click(){clicks.push(this);}remove(){}removeAttribute(name){delete this[name];}
   }
   const elements=new Map(),listeners={},storage=new Map([['jmu_registrations_v1','private legacy roster'],['jmu_my_passes','private legacy passes']]);
+  for(const [key,value] of options.storage||[])storage.set(key,value);
   const doc={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);},
     createElement(tag){return new Element(tag);},querySelector(){return new Element();},querySelectorAll(){return [];},addEventListener(type,fn){listeners[type]=fn;},body:new Element()};
-  const store={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},sessionEntries=new Map();
+  const store={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},sessionEntries=new Map(options.session||[]);
   const sessionStore={getItem:key=>sessionEntries.get(key)||null,setItem:(key,value)=>sessionEntries.set(key,value),removeItem:key=>sessionEntries.delete(key)};
   const qr=[];const context={document:doc,localStorage:store,sessionStorage:sessionStore,fetch,JmuSecurityUI:ui,JmuPricing:require('../campaign-config'),console,URL,URLSearchParams,TextEncoder,
     crypto:require('node:crypto').webcrypto,Uint8Array,Blob,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
-    location:{hash:'',origin:'https://event.example',pathname:'/',search:''},history:{replaceState(){}},navigator:{},QRCode:{toCanvas:(canvas,text,opts,cb)=>{qr.push(text);cb(null);}},prompt:()=>null,confirm:()=>false};
+    location:{hash:options.hash||'',origin:'https://event.example',pathname:'/',search:''},history:{replaceState(...args){history.push(args);context.location.hash='';}},navigator:{},QRCode:{toCanvas:(canvas,text,opts,cb)=>{qr.push(text);cb(null);}},prompt:()=>null,confirm:()=>false};
   context.window=context;context.JmuCheckoutSDK={load:require('../checkout-loader').createLoader(context,doc)};
   vm.createContext(context);vm.runInContext(source,context);listeners.DOMContentLoaded();
-  return {context,doc,elements,listeners,storage,sessionEntries,qr,Element};
+  return {context,doc,elements,listeners,storage,sessionEntries,qr,Element,clicks,history};
 }
 const response=data=>({ok:true,status:200,json:async()=>({success:true,...data})});
 test('Solo stepper updates quantities one through ten through delegated controls and enforces both bounds',()=>{
@@ -221,4 +223,114 @@ test('unexpected HTML API responses are not mistaken for SDK failures or display
   for(let i=0;i<20&&browser.doc.getElementById('reg-payment-feedback').hidden!==false;i++)await new Promise(setImmediate);
   assert.match(browser.doc.getElementById('reg-payment-feedback').textContent,/booking server returned an unexpected response/);
   assert.ok(!browser.doc.getElementById('reg-payment-feedback').textContent.includes('private provider'));
+});
+
+const paidPass={...attendee,name:'Paid fixture',ticketId:'JMU-00012',awaitingDetails:false};
+const ownerEntry={passId:attendee.passId,ticketId:paidPass.ticketId,recoveryToken:'c'.repeat(43)};
+const savedOwner=[['jmu_owner_tokens_v2',JSON.stringify([ownerEntry])]];
+const groupInvite='https://chat.whatsapp.com/FJt21SRONmx3cnrgsd2QK0?s=sh&p=a&mlu=4&ilr=4&iam=0';
+const resultCard=browser=>browser.doc.getElementById('mypass-results').children[0];
+const resultText=browser=>resultCard(browser).children.map(child=>child.textContent).join(' ');
+
+test('My Pass removes the manual private-code field and explains private cross-device recovery',()=>{
+  assert.ok(!html.includes('mypass-recovery-token'));assert.ok(!html.includes('Private recovery code'));
+  assert.match(html,/<label for="mypass-search-input">Ticket ID \/ Pass ID<\/label>/);
+  assert.match(html,/id="mypass-search-input"[^>]*aria-describedby="mypass-device-help"/);
+  assert.ok(html.includes('On a new device'));assert.ok(html.includes('private recovery link'));
+  const css=fs.readFileSync(path.join(__dirname,'../styles-v2.css'),'utf8');
+  assert.match(css,/\.lookup-pass-actions\s*\{[^}]*flex-wrap:\s*wrap/);
+  assert.match(css,/\.lookup-pass-actions \.button\s*\{[^}]*min-height:\s*48px/);
+});
+
+test('saved paid booking is retrieved on opening My Pass after reload and can download again without a new order',async()=>{
+  const calls=[];
+  const browser=browserFixture(async(url,opts)=>{calls.push({url,opts});return response({pass:paidPass});},{storage:savedOwner});
+  await browser.context.openMyPassModal();
+  assert.equal(calls.length,1);assert.equal(calls[0].url,'/api/get-pass?id='+attendee.passId);
+  assert.equal(calls[0].opts.headers.Authorization,'Bearer '+ownerEntry.recoveryToken);
+  assert.equal(calls[0].opts.cache,'no-store');assert.equal(browser.doc.getElementById('mypass-search-input').value,'JMU-00012');
+  const actions=resultCard(browser).children.find(child=>child.className==='lookup-pass-actions');
+  assert.deepEqual(actions.children.map(button=>button.textContent),['Show Digital Pass','Download Ticket']);
+  for(const button of actions.children)assert.equal(button.type,'button');
+  let captures=0;browser.context.html2canvas=async card=>{assert.equal(card,browser.doc.getElementById('digital-pass-card'));captures++;return {toDataURL:()=> 'data:image/png;base64,fixture'};};
+  await actions.children[1].listeners.click();
+  assert.equal(captures,1);assert.equal(browser.clicks[0].download,'JMU-00012-Digital-Pass.png');
+  assert.equal(browser.doc.getElementById('btn-join-whatsapp-group').href,groupInvite);
+  assert.deepEqual(browser.qr,[attendee.passId]);
+  await browser.context.openMyPassModal();
+  await resultCard(browser).children.find(child=>child.className==='lookup-pass-actions').children[1].listeners.click();
+  assert.equal(captures,2);assert.equal(calls.length,2);assert.ok(calls.every(call=>call.url.startsWith('/api/get-pass')));
+  assert.ok(![...browser.storage.values()].some(value=>value.includes(paidPass.name)));
+});
+
+test('short-ID search uses saved private access, while another browser cannot look up or download by ID alone',async()=>{
+  const calls=[],browser=browserFixture(async(url,opts)=>{calls.push({url,opts});return response({pass:paidPass});},{storage:savedOwner});
+  browser.doc.getElementById('mypass-search-input').value=' jmu-00012 ';await browser.context.handleMyPassSearch();
+  assert.equal(calls[0].url,'/api/get-pass?id=JMU-00012');assert.equal(calls[0].opts.headers.Authorization,'Bearer '+ownerEntry.recoveryToken);
+  const empty=browserFixture(async()=>assert.fail('A guessed ID has no saved authorization'));
+  empty.doc.getElementById('mypass-search-input').value='JMU-00012';await empty.context.handleMyPassSearch();
+  assert.match(empty.doc.getElementById('mypass-results').textContent,/private recovery/i);assert.equal(empty.doc.getElementById('mypass-results').children.length,0);
+  let captures=0;empty.context.html2canvas=async()=>{captures++;};empty.context.downloadPassAsImage();assert.equal(captures,0);
+});
+
+test('organizer recovery link clears the fragment before one authenticated lookup and normalizes the saved alias',async()=>{
+  const calls=[];let browser;
+  browser=browserFixture(async(url,opts)=>{calls.push({url,opts});return response({pass:paidPass});},{
+    hash:'#pass=JMU-00012&access='+ownerEntry.recoveryToken});
+  for(let i=0;i<5;i++)await new Promise(setImmediate);
+  assert.equal(browser.history.length,1);assert.equal(browser.history[0][2],'/');assert.equal(browser.context.location.hash,'');
+  assert.equal(calls.length,1);assert.equal(calls[0].url,'/api/get-pass?id=JMU-00012');
+  assert.equal(calls[0].opts.headers.Authorization,'Bearer '+ownerEntry.recoveryToken);
+  const entries=JSON.parse(browser.storage.get('jmu_owner_tokens_v2'));assert.equal(entries.length,1);
+  assert.equal(entries[0].passId,attendee.passId);assert.equal(entries[0].ticketId,'JMU-00012');
+  assert.ok(!calls[0].url.includes(ownerEntry.recoveryToken));
+  const invalid=browserFixture(async()=>assert.fail('Malformed recovery links must not cause a lookup'),{hash:'#pass=JMU-00012&access=invalid'});
+  assert.equal(invalid.history.length,1);assert.equal(invalid.storage.has('jmu_owner_tokens_v2'),false);
+});
+
+test('the supplied shared WhatsApp invite is available on verified tickets, including browsers with the obsolete placeholder',()=>{
+  for(const value of [null,'https://chat.whatsapp.com/invite','javascript:alert(1)','https://chat.whatsapp.com.evil.example/'+'a'.repeat(22)]){
+    const browser=browserFixture(async()=>response({}),{storage:value?[['jmu_config_override',JSON.stringify({whatsappGroupLink:value})]]:[]});
+    browser.context.handlePaymentConfirmed(paidPass);const link=browser.doc.getElementById('btn-join-whatsapp-group');
+    assert.equal(link.href,groupInvite);assert.equal(link.hidden,false);assert.equal(link.style.display,'flex');
+  }
+  assert.match(html,/<a id="btn-join-whatsapp-group"[^>]* hidden[^>]*display:none/);
+  assert.ok(html.includes('saving here does not update other browsers'));
+});
+
+test('pending, archived and refunded lookup results never expose a download action or attendee-group button',async()=>{
+  for(const changes of [{status:'pending',paymentState:'pending',awaitingDetails:true,ticketId:null},
+    {status:'revoked',paymentState:'revoked'},{isDeleted:true}]){
+    const browser=browserFixture(async()=>response({pass:{...paidPass,...changes}}),{storage:savedOwner});
+    await browser.context.openMyPassModal();assert.ok(!resultCard(browser).children.some(child=>child.className==='lookup-pass-actions'));
+    browser.context.handlePaymentConfirmed({...paidPass,...changes});
+    assert.equal(browser.doc.getElementById('btn-join-whatsapp-group').href,undefined);
+    let captures=0;browser.context.html2canvas=async()=>{captures++;};browser.context.downloadPassAsImage();assert.equal(captures,0);
+  }
+});
+
+test('My Pass resumes a captured payment even before webhook completion using only the saved original form',async()=>{
+  const details={category:'solo',quantity:1,name:'Paid fixture',phone:'9999999999',idempotencyKey:'a'.repeat(64)},calls=[];
+  const browser=browserFixture(async(url,opts)=>{
+    calls.push({url,opts});return response({pass:url.startsWith('/api/get-pass')?{...paidPass,name:'',ticketId:null,status:'pending',paymentState:'pending',awaitingDetails:true}:paidPass});
+  },{storage:savedOwner,session:[['jmu_pending_details_v1:'+attendee.passId,JSON.stringify(details)]]});
+  await browser.context.openMyPassModal();assert.equal(calls.length,2);assert.equal(calls[1].url,'/api/verify-payment');
+  const sent=JSON.parse(calls[1].opts.body);assert.deepEqual(sent,{passId:attendee.passId,resume:true,bookingDetails:details});
+  assert.equal(calls[1].opts.headers.Authorization,'Bearer '+ownerEntry.recoveryToken);
+  assert.ok(resultText(browser).includes('Payment verified'));assert.equal(browser.doc.getElementById('mypass-search-input').value,'JMU-00012');
+  assert.equal(browser.sessionEntries.size,0);
+  assert.ok(![...browser.storage.values()].some(value=>value.includes('Paid fixture')));
+});
+
+test('unpaid My Pass remains pending without routine organizer confirmation; missing tab details cannot auto-complete',async()=>{
+  const details={name:'Unpaid fixture'},pending={...paidPass,name:'',ticketId:null,status:'pending',paymentState:'pending',awaitingDetails:true};
+  for(const savedDetails of [true,false]){
+    let resumes=0;const browser=browserFixture(async url=>{
+      if(url==='/api/verify-payment'){resumes++;return {ok:false,status:409,json:async()=>({success:false,code:'PAYMENT_PENDING',error:'Not captured yet'})};}
+      return response({pass:pending});
+    },{storage:savedOwner,session:savedDetails?[['jmu_pending_details_v1:'+attendee.passId,JSON.stringify(details)]]:[]});
+    await browser.context.openMyPassModal();assert.equal(resumes,savedDetails?1:0);
+    assert.ok(resultText(browser).includes('after payment is verified'));assert.ok(!/organizer reconciliation/i.test(resultText(browser)));
+    assert.ok(!resultCard(browser).children.some(child=>child.className==='lookup-pass-actions'));
+  }
 });

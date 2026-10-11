@@ -38,8 +38,10 @@ async function reconcile(repo, provider, frozen, paymentId, eventId = null, audi
 }
 async function paymentForOrder(provider, orderId) {
   const list = await provider.orders.fetchPayments(orderId);
-  const candidates = list?.items?.filter(p => ['captured','refunded'].includes(p.status));
-  if (!Array.isArray(candidates) || candidates.length !== 1) s.reject(409, 'Payment requires organizer reconciliation');
+  if(!Array.isArray(list?.items)||list.items.some(p=>!p||typeof p!=='object'))s.reject(503,'Payment confirmation is temporarily unavailable; retry My Pass','PAYMENT_RECONCILIATION_PENDING');
+  const candidates = list.items.filter(p => ['captured','refunded'].includes(p.status));
+  if(candidates.length===0)s.reject(409,'Payment has not been captured yet; your ticket will appear after verification','PAYMENT_PENDING');
+  if(candidates.length!==1)s.reject(409,'Payment requires organizer reconciliation','PAYMENT_MISMATCH');
   return s.providerId(candidates[0].id, 'pay');
 }
 module.exports = { assertOrder, validatePayment, reconcile, paymentForOrder };

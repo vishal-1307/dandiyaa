@@ -45,14 +45,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Milan Utsav">
 
-  <link rel="stylesheet" href="styles-v2.css?v=5">
+  <link rel="stylesheet" href="styles-v2.css?v=6">
   <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
   <script src="qrcode.bundle.js" defer></script>
   <script src="html2canvas.bundle.js" defer></script>
-  <script src="campaign-config.js?v=5" defer></script>
-  <script src="security-ui.js?v=5" defer></script>
-  <script src="checkout-loader.js?v=5" defer></script>
-  <script src="app.js?v=5" defer></script>
+  <script src="campaign-config.js?v=6" defer></script>
+  <script src="security-ui.js?v=6" defer></script>
+  <script src="checkout-loader.js?v=6" defer></script>
+  <script src="app.js?v=6" defer></script>
 
   <!-- JSON-LD Structured Data: Event Schema & Organization Schema -->
   <script type="application/ld+json">
@@ -904,7 +904,7 @@
 
           <!-- Official WhatsApp Group Invite Box -->
           <div class="pass-actions-box" style="margin-top:20px;">
-            <a id="btn-join-whatsapp-group" class="button" href="https://chat.whatsapp.com/invite" target="_blank" rel="noopener noreferrer" style="width:100%; background:linear-gradient(135deg, #25D366, #128C7E); border-color:#25D366; box-shadow:0 4px 14px rgba(37,211,102,0.35); font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px; text-decoration:none;">
+            <a id="btn-join-whatsapp-group" class="button" hidden target="_blank" rel="noopener noreferrer" style="width:100%; background:linear-gradient(135deg, #25D366, #128C7E); border-color:#25D366; box-shadow:0 4px 14px rgba(37,211,102,0.35); font-weight:700; display:none; align-items:center; justify-content:center; gap:8px; margin-bottom:12px; text-decoration:none;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0;">
                 <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
               </svg>
@@ -943,11 +943,11 @@
         </p>
 
         <form class="lookup-form" data-ui-event="submit" data-ui-handler="handleMyPassSearch" data-ui-args="[&quot;__event__&quot;]">
-          <label for="mypass-recovery-token">Organizer recovery code (only if this device has no saved booking)</label>
-          <input type="password" id="mypass-recovery-token" class="form-control" autocomplete="off" maxlength="43" placeholder="Private recovery code">
-          <input type="text" id="mypass-search-input" class="form-control" placeholder="Enter Ticket ID (e.g. JMU-00012)" required autocomplete="off" autocapitalize="characters">
+          <label for="mypass-search-input">Ticket ID / Pass ID</label>
+          <input type="text" id="mypass-search-input" class="form-control" placeholder="Enter Ticket ID (e.g. JMU-00012)" required autocomplete="off" autocapitalize="characters" aria-describedby="mypass-device-help">
           <button type="submit" class="button small">Search Pass</button>
         </form>
+        <p id="mypass-device-help" style="font-size:13px; color:var(--muted); margin-top:12px;">Use the same browser used for booking. On a new device, <a href="https://wa.me/917050551310" target="_blank" rel="noopener noreferrer">contact the organizer</a> for a private recovery link.</p>
 
         <div class="lookup-results-wrap" id="mypass-results">
           <!-- Dynamic results injected here -->
@@ -1081,7 +1081,7 @@
               <div class="form-group">
                 <label for="cfg-whatsapp-group">Official WhatsApp Attendees Group Link</label>
                 <input type="url" id="cfg-whatsapp-group" class="form-control" placeholder="https://chat.whatsapp.com/..." required>
-                <small style="color:var(--muted); font-size:12px; display:block; margin-top:4px;">Is link par click karke confirmed attendees ticket download karne ke baad official WhatsApp group me add ho sakte hain.</small>
+                <small style="color:var(--muted); font-size:12px; display:block; margin-top:4px;">Device preview only. The shared customer link is set in the released site configuration; saving here does not update other browsers.</small>
               </div>
 
               <button type="submit" class="button small">Save Settings</button>
