@@ -39,6 +39,13 @@ function equal(a, b) {
 function required(env, name, minimum = 1) {
   const value = env[name];
   if (typeof value !== 'string' || value.length < minimum) reject(503, 'Service is not configured', 'CONFIGURATION_REQUIRED');
+  // dotenv removes surrounding quotes; dashboard environment values do not.
+  // Reject obvious copy/paste wrappers, rather than changing a credential or
+  // allowing a failed gateway call to reserve a booking. Report names only.
+  if (['RAZORPAY_KEY_ID','RAZORPAY_KEY_SECRET'].includes(name) &&
+      (/\s/.test(value) || /^["']|["']$/.test(value) || value.startsWith(name + '='))) {
+    reject(503, name + ' has invalid formatting. Paste only the credential value, without quotes, spaces or NAME=.', 'CHECKOUT_CONFIGURATION_FORMAT');
+  }
   return value;
 }
 function appOrigin(env) {

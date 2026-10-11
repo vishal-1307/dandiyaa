@@ -85,3 +85,16 @@ test('availability diagnosis uses only provider GET, no personal details, bookin
   h.provider.orders.all=async()=>{throw {statusCode:401,error:{code:'BAD_REQUEST_ERROR',description:'private fixture credential'}};};
   const failed=await h.invoke('createOrder',{body:{operation:'availability'}});assert.equal(failed.body.code,'CHECKOUT_CONFIGURATION_ERROR');assert.ok(!JSON.stringify(failed.body).includes('private fixture'));
 });
+
+test('misformatted payment credentials fail before database allocation and never appear in errors',async()=>{
+  for(const name of ['RAZORPAY_KEY_ID','RAZORPAY_KEY_SECRET'])for(const wrapper of [v=>' '+v,v=>v+'\n',v=>'"'+v+'"',v=>"'"+v+"'",v=>name+'='+v]){
+    const h=harness(),privateValue='private-fixture-never-display';
+    h.handlers=require('../server/handlers').createHandlers({env:{...require('./helpers').env,[name]:wrapper(privateValue)},
+      provider:h.provider,database:async()=>{assert.fail('Malformed credentials must be rejected before database access');}});
+    for(const body of [h.valid,{operation:'availability'}]){
+      const result=await h.invoke('createOrder',{body});assert.equal(result.code,503);assert.equal(result.body.code,'CHECKOUT_CONFIGURATION_FORMAT');
+      assert.ok(result.body.error.includes(name));assert.ok(!JSON.stringify(result.body).includes(privateValue));
+      assert.equal(h.calls.create,0);assert.equal(h.repo.orders.size,0);assert.equal(h.repo.campaigns.size,0);assert.equal(h.repo.passes.size,0);
+    }
+  }
+});
