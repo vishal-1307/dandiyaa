@@ -31,8 +31,11 @@ const DEFAULT_CONFIG = {
     localStorage.setItem('jmu_config_override',JSON.stringify({whatsappGroupLink:link}));
   }
   async function apiRequest(url,options={}) {
-    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});
-    const data=await response.json();
+    let response,data;
+    try { response=await fetch(url,{credentials:'same-origin',cache:'no-store',...options}); }
+    catch { const error=new Error('Could not reach the booking server. Check your connection before retrying; if you paid, do not pay again.');error.code='API_NETWORK_FAILURE';throw error; }
+    try { data=await response.json();if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Invalid response envelope'); }
+    catch { const error=new Error('The booking server returned an unexpected response. Please contact the organizer; if you paid, do not pay again.');error.code='API_INVALID_RESPONSE';throw error; }
     if (!response.ok || !data.success) {
       const error=new Error(data.error||'Request could not be completed'); error.status=response.status; error.code=data.code; throw error;
     }
@@ -43,8 +46,15 @@ const DEFAULT_CONFIG = {
   }
   function resetPricingNote(){
     const note=document.getElementById('reg-pricing-detail'),promotion=JmuPricing.EARLY_BIRD;
-    if(note)note.textContent=promotion.enabled?'Regular prices are shown above. Solo early bird is ₹'+promotion.unitPrice/100+' each for the first '+promotion.limit+' attendees, subject to availability. Eligibility and the final amount are confirmed by the server at checkout. Your promotional reservation lasts '+promotion.reservationMinutes+
-      ' minutes. Payment must be verified before expiry; late payments require organizer review/refund and do not guarantee admission.':'The server confirms your final checkout price.';
+    if(note)note.textContent='Final price confirmed at checkout.';
+    const offer=document.getElementById('reg-early-bird-offer');
+    if(offer)offer.style.display=promotion.enabled&&wizardState.category==='solo'?'block':'none';
+    const copy=document.getElementById('reg-early-bird-copy');
+    if(copy)copy.textContent='₹'+promotion.unitPrice/100+' per person for the first '+promotion.limit+' solo attendees.';
+    const policy=document.getElementById('reg-reservation-policy');
+    if(policy)policy.textContent='Promotional reservations last '+promotion.reservationMinutes+' minutes. Payment must be verified before expiry. Late payments require organizer review/refund and do not guarantee admission. If debited, do not pay again.';
+    const caption=document.getElementById('reg-price-caption');if(caption)caption.textContent='Regular-price estimate';
+    const feedback=document.getElementById('reg-payment-feedback');if(feedback){feedback.textContent='';feedback.hidden=true;}
   }
 
   // --- Security: HTML Entity Sanitizer to Prevent DOM XSS ---
@@ -168,6 +178,7 @@ function getMyPasses() {
 
     modal.classList.add('active');
     document.body.classList.add('modal-open');
+    const content=document.querySelector('#reg-modal .modal-content');if(content)content.scrollTop=0;
 
     // Populate category tabs
     updateCategorySelection(preferredCategory);
@@ -224,8 +235,8 @@ function getMyPasses() {
 
   function updateCategorySelection(category) {
     if (checkoutBusy) return;
-    resetPricingNote();
     wizardState.category = category;
+    resetPricingNote();
     const config = getConfig();
 
     const soloBtn = document.getElementById('cat-btn-solo');
@@ -335,38 +346,9 @@ function getMyPasses() {
     startRazorpayPayment();
   };
 
-  // Resilient Razorpay SDK loader (prevents "SDK loading" failure on slower networks)
+  // SDK failure is distinct from order/API failures and happens before allocation.
   function ensureRazorpayLoaded() {
-    return new Promise((resolve) => {
-      if (typeof window.Razorpay === 'function') {
-        return resolve(true);
-      }
-      let existingScript = document.querySelector('script[src*="checkout.razorpay.com"]');
-      if (existingScript) {
-        existingScript.addEventListener('load', () => resolve(true), { once: true });
-        existingScript.addEventListener('error', () => resolve(false), { once: true });
-        // Poll for up to 4 seconds
-        let checks = 0;
-        const interval = setInterval(() => {
-          checks++;
-          if (typeof window.Razorpay === 'function') {
-            clearInterval(interval);
-            resolve(true);
-          } else if (checks > 40) {
-            clearInterval(interval);
-            resolve(false);
-          }
-        }, 100);
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.head.appendChild(script);
-    });
+    return JmuCheckoutSDK.load();
   }
 
   // Direct Razorpay Gateway Checkout Launcher
@@ -387,9 +369,11 @@ let checkoutBusy=false;
       ...wizardState.data};
     const reset=()=>{lockBookingControls(false);if(button)button.disabled=false;if(label)label.textContent='Pay Now · ₹'+wizardState.amount+' ➔';};
     if(button)button.disabled=true;
-    if(label)label.textContent='Preparing your booking...';
+    const feedback=document.getElementById('reg-payment-feedback');if(feedback){feedback.textContent='';feedback.hidden=true;}
+    if(label)label.textContent='Loading secure checkout...';
     try {
-      if(!await ensureRazorpayLoaded()) throw new Error('Payment service is loading. Please retry');
+      await ensureRazorpayLoaded();
+      if(label)label.textContent='Confirming your price...';
       const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(input)))),b=>b.toString(16).padStart(2,'0')).join('');
       let attempt;
       try { attempt=JSON.parse(localStorage.getItem('jmu_booking_attempt_v2')||'null'); } catch {}
@@ -405,9 +389,10 @@ let checkoutBusy=false;
         if(quote.promotionalQuantity)breakdown.push(quote.promotionalQuantity+' early-bird × ₹'+quote.promotionalUnitPaise/100);
         if(quote.regularQuantity)breakdown.push(quote.regularQuantity+' regular × ₹'+quote.regularUnitPaise/100);
         detail.textContent=breakdown.join(' + ')+' = ₹'+booking.amount/100+(booking.promotionExpiresAt?
-          '. Reservation ends '+new Date(booking.promotionExpiresAt).toLocaleTimeString()+'. Verification after expiry requires organizer review/refund; a ticket is not guaranteed.':'');
+          '. Reserved until '+new Date(booking.promotionExpiresAt).toLocaleTimeString()+'. See checkout timing.':'');
       }
       const summary=document.getElementById('reg-summary-amount');if(summary)summary.textContent='₹'+booking.amount/100;
+      const caption=document.getElementById('reg-price-caption');if(caption)caption.textContent='Confirmed checkout total';
       wizardState.amount=booking.amount/100;
       if(label)label.textContent='Pay Now · ₹'+wizardState.amount+' ➔';
       const existing=await apiRequest('/api/get-pass?id='+encodeURIComponent(booking.passId),ownerOptions(booking.passId));
@@ -432,6 +417,7 @@ let checkoutBusy=false;
       checkout.on('payment.failed',()=>{showToast('Payment was not completed. Check your payment app before retrying.','error');});
       checkout.open();
     } catch(error) {
+      if(feedback){feedback.textContent=error.message;feedback.hidden=false;}
       showToast(error.message,'error');reset();
       if(error.code==='PROMOTION_EXPIRED'&&confirm('The promotional reservation expired. If money was debited, do not pay again—contact the organizer for review/refund. Only if NO payment was made, start a new booking?')){
         localStorage.removeItem('jmu_booking_attempt_v2');showToast('New booking enabled. Press Pay Now to request a fresh server quote.');
@@ -740,8 +726,8 @@ document.addEventListener('DOMContentLoaded',function(){
     const config=getConfig();if(localStorage.getItem('jmu_config_override'))saveConfigOverride({whatsappGroupLink:config.whatsappGroupLink});
     initCountdown();bindInterface();
     const promotion=JmuPricing.EARLY_BIRD,note=document.getElementById('early-bird-note');
-    if(note)note.textContent=promotion.enabled?'Solo early bird: ₹'+promotion.unitPrice/100+' for the first '+promotion.limit+
-      ' individual attendees, subject to availability at checkout. '+promotion.reservationMinutes+'-minute reservations; final price is confirmed by the server. Regular Solo ₹'+JmuPricing.CATALOG.solo/100+'; Couple ₹'+JmuPricing.CATALOG.couple/100+'.':
+    if(note)note.textContent=promotion.enabled?'Early bird: ₹'+promotion.unitPrice/100+' per person for the first '+promotion.limit+
+      ' solo attendees. Limited availability; final price confirmed at checkout. Regular Solo ₹'+JmuPricing.CATALOG.solo/100+'; Couple ₹'+JmuPricing.CATALOG.couple/100+'.':
       'Regular Solo ₹'+JmuPricing.CATALOG.solo/100+'; Couple ₹'+JmuPricing.CATALOG.couple/100+'.';
     const fragment=new URLSearchParams(location.hash.slice(1));
     if(fragment.has('access')){

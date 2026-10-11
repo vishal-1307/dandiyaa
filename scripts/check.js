@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs'), path = require('node:path'), { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname,'..');
-const files = ['app.js','security-ui.js','campaign-config.js'];
+const files = ['app.js','security-ui.js','campaign-config.js','checkout-loader.js'];
 for (const directory of ['api','server','scripts','tests']) {
   function walk(relative) {
     if (!fs.existsSync(path.join(root,relative))) return;

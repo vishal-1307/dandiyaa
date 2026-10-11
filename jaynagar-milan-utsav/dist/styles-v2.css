@@ -2546,6 +2546,23 @@ footer {
 }
 
 /* Compact, keyboard-accessible Solo quantity stepper. */
+.early-bird-offer {
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.early-bird-offer > strong { color: var(--gold); font-size: 12px; }
+.early-bird-offer > p { margin: 6px 0; color: var(--snow); font-size: 16px; font-weight: 600; }
+.early-bird-offer > small { color: var(--muted); line-height: 1.5; display: block; }
+.checkout-policy { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.checkout-policy summary { cursor: pointer; min-height: 44px; padding: 8px 24px 8px 0; font-size: 12px; line-height: 1.4; align-content: center; }
+.checkout-policy summary::after { top: 50%; transform: translateY(-50%); font-size: 18px; }
+.checkout-policy summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.checkout-policy p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
+.payment-feedback { color: var(--snow); border-left: 3px solid var(--gold); padding: 10px 12px; line-height: 1.5; font-size: 13px; }
 .quantity-label {
   margin: 0 0 10px;
   font-size: 13px;
@@ -2619,4 +2636,12 @@ footer {
 .lookup-form { flex-wrap: wrap; }
 .lookup-form label { flex-basis: 100%; font-size: 12px; color: var(--muted); }
 #mypass-recovery-token { width: 100%; min-width: 0; }
+
+/* Ticket booking actions must not widen the page on narrow phones. */
+@media (max-width: 600px) {
+  .ticket-grid { grid-template-columns: minmax(0, 1fr); }
+  .ticket { min-width: 0; }
+  .ticket-bottom { flex-wrap: wrap; }
+  .ticket-bottom .button { width: 100%; min-width: 0; white-space: normal; padding-inline: 12px; }
+}
 

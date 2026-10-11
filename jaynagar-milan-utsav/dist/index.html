@@ -45,13 +45,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Milan Utsav">
 
-  <link rel="stylesheet" href="styles-v2.css?v=3">
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <link rel="stylesheet" href="styles-v2.css?v=4">
+  <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
   <script src="qrcode.bundle.js" defer></script>
   <script src="html2canvas.bundle.js" defer></script>
-  <script src="campaign-config.js?v=3" defer></script>
-  <script src="security-ui.js?v=3" defer></script>
-  <script src="app.js?v=3" defer></script>
+  <script src="campaign-config.js?v=4" defer></script>
+  <script src="security-ui.js?v=4" defer></script>
+  <script src="checkout-loader.js?v=4" defer></script>
+  <script src="app.js?v=4" defer></script>
 
   <!-- JSON-LD Structured Data: Event Schema & Organization Schema -->
   <script type="application/ld+json">
@@ -774,6 +775,15 @@
           </div>
 
           <!-- Solo Pass Quantity Selector -->
+          <aside id="reg-early-bird-offer" class="early-bird-offer" aria-label="Solo early-bird offer">
+            <strong>EARLY BIRD OFFER</strong>
+            <p id="reg-early-bird-copy">₹199 per person for the first 100 solo attendees.</p>
+            <small>Limited availability; final price confirmed at checkout. Regular price ₹249.</small>
+            <details class="checkout-policy">
+              <summary>Checkout timing &amp; late payments</summary>
+              <p id="reg-reservation-policy">Promotional reservations last 20 minutes. Payment must be verified before expiry. Late payments require organizer review/refund and do not guarantee admission. If debited, do not pay again.</p>
+            </details>
+          </aside>
           <div id="solo-quantity-group" style="margin-bottom:16px;">
             <p id="solo-quantity-label" class="quantity-label">
               🎟️ Select Ticket Quantity
@@ -819,12 +829,13 @@
             <div class="form-summary-card">
               <div>
                 <span id="reg-summary-category">Solo Pass (1 Ticket)</span>
-                <p style="font-size:12px; color:var(--muted); margin:2px 0 0;">Official entry pass with QR code</p>
+                <p id="reg-price-caption" style="font-size:12px; color:var(--muted); margin:2px 0 0;">Regular-price estimate</p>
               </div>
               <strong id="reg-summary-amount" aria-live="polite" aria-atomic="true">₹249</strong>
             </div>
 
-            <p id="reg-pricing-detail" class="booking-note" aria-live="polite">Regular prices are shown above. Eligible Solo early-bird pricing is confirmed by the server at checkout, with a 20-minute reservation.</p>
+            <p id="reg-pricing-detail" class="booking-note" aria-live="polite">Final price confirmed at checkout.</p>
+            <p id="reg-payment-feedback" class="payment-feedback" role="alert" hidden></p>
             <button type="submit" class="button" style="width:100%;" id="btn-proceed-pay">
               <span id="btn-proceed-pay-text">Pay Now · ₹249 ➔</span>
             </button>

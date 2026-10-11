@@ -51,6 +51,22 @@ Remove-Variable taskCredential
 
 Store the resulting hash as `ADMIN_PASSWORD_HASH`; keep the password private. Hashing uses fixed scrypt parameters N=32768, r=8, p=3 (32 MiB), following an [OWASP recommended configuration](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt). Generate the hash with this utility, not another work factor. Login uses a 30-minute HTTP-only, Secure HTTPS, SameSite=Strict cookie; logout revokes the persisted session. Every administrative mutation requires the site origin and session-bound CSRF token. Database-backed login throttling permits five attempts per IP per fixed 15-minute window, including successful attempts.
 
+## Private release credential handoff (Windows PowerShell 7)
+
+`scripts/release-secrets.ps1 -Action Initialize` generates separate random session and webhook secrets into a user-restricted DPAPI-encrypted vault under `%LOCALAPPDATA%/JMU`, outside the repository. It never updates providers or prints values. Each Initialize action makes a new vault; existing ones remain intact. Use the explicit `-VaultPath` printed by Initialize when several vaults exist.
+
+Run these yourself in an interactive local terminal, not in chat:
+
+```powershell
+pwsh -NoProfile -File scripts/release-secrets.ps1 -Action Admin
+pwsh -NoProfile -File scripts/release-secrets.ps1 -Action CopySession
+pwsh -NoProfile -File scripts/release-secrets.ps1 -Action CopyWebhook
+```
+
+Admin securely prompts twice for a NEW unique 16–256-character password, invokes the existing compatible hash utility through stdin, and copies only the resulting hash to your clipboard for Vercel `ADMIN_PASSWORD_HASH`. CopySession supplies `ADMIN_SESSION_SECRET`. CopyWebhook supplies the SAME replacement secret for the existing Razorpay webhook and Vercel `RAZORPAY_WEBHOOK_SECRET`; do not add a duplicate webhook. Clear the clipboard after each handoff (`Set-Clipboard -Value ''`), and do not use screenshots or chat to transfer values. Clipboard-history/sync software can retain copied secrets; disable it or use your approved secret-transfer process. Updating variables does not update an existing deployment: redeploy the verified release with the intended environment scope afterward.
+
+Checkout assets use one revision and `no-store` revalidation for application/pricing scripts. The SDK loader waits at most 20 seconds, validates the constructor, removes failed script tags, and permits a fresh user retry. SDK errors happen before server allocation; backend/configuration errors are displayed separately. The restrictive CSP permits the specific Razorpay risk-detection script observed in Checkout, without permitting arbitrary inline scripts or wildcard script hosts. Promotional terms are available in the expandable checkout-timing disclosure; the displayed regular estimate changes to the frozen server quote before Checkout opens.
+
 ## Database migration and safe integration tests
 
 Never run the migration against production without owner-authorized backup, preflight and schema review. The supplied command deliberately permits only an explicit `TEST_DATABASE_URL` targeting loopback PostgreSQL with a database name beginning `jmu_test_`. It refuses `DATABASE_URL`, cloud hosts, non-test names and URL connection overrides. No production migration command is supplied.

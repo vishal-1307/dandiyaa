@@ -35,12 +35,12 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-DKZFy0h7bNPSDIpzmCY3Qmd2k8rHczHLxzKCtCRGPlU=' https://checkout.razorpay.com https://api.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://www.google.com https://maps.google.com; connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com https://lumberjack-rzp.razorpay.com; object-src 'none'; base-uri 'self'; form-action 'self' https://wa.me upi:; frame-ancestors 'self';"
+          "value": "default-src 'self'; script-src 'self' 'sha256-DKZFy0h7bNPSDIpzmCY3Qmd2k8rHczHLxzKCtCRGPlU=' https://checkout.razorpay.com https://api.razorpay.com https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://www.google.com https://maps.google.com; connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com https://lumberjack-rzp.razorpay.com; object-src 'none'; base-uri 'self'; form-action 'self' https://wa.me upi:; frame-ancestors 'self';"
         }
       ]
     },
     {
-      "source": "/(index.html|app.js|404.html|$)",
+      "source": "/(index.html|app.js|campaign-config.js|security-ui.js|checkout-loader.js|404.html|$)",
       "headers": [
         {
           "key": "Cache-Control",

@@ -16,7 +16,8 @@ function browserFixture(fetch){
   const qr=[];const context={document:doc,localStorage:store,sessionStorage:store,fetch,JmuSecurityUI:ui,JmuPricing:require('../campaign-config'),console,URL,URLSearchParams,TextEncoder,
     crypto:require('node:crypto').webcrypto,Uint8Array,Blob,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
     location:{hash:'',origin:'https://event.example',pathname:'/',search:''},history:{replaceState(){}},navigator:{},QRCode:{toCanvas:(canvas,text,opts,cb)=>{qr.push(text);cb(null);}},prompt:()=>null,confirm:()=>false};
-  context.window=context;vm.createContext(context);vm.runInContext(source,context);listeners.DOMContentLoaded();
+  context.window=context;context.JmuCheckoutSDK={load:require('../checkout-loader').createLoader(context,doc)};
+  vm.createContext(context);vm.runInContext(source,context);listeners.DOMContentLoaded();
   return {context,doc,elements,listeners,storage,qr,Element};
 }
 const response=data=>({ok:true,status:200,json:async()=>({success:true,...data})});
@@ -65,6 +66,8 @@ test('stepper uses labelled native non-submit buttons, live output, and visible 
   const css=fs.readFileSync(path.join(__dirname,'../styles-v2.css'),'utf8');
   for(const state of [':hover:not(:disabled)',':active:not(:disabled)',':focus-visible',':disabled'])assert.ok(css.includes('.quantity-stepper-button'+state));
   assert.match(css,/\.quantity-stepper-button\s*\{[^}]*min-height:\s*48px/);
+  assert.match(css,/\.ticket-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(css,/\.ticket-bottom\s*\{\s*flex-wrap:\s*wrap/);
 });
 const attendee={passId:'JMU-'+ 'A'.repeat(32),name:"'); globalThis.pwned=true; // <img src=x onerror=alert(1)>",partnerName:'<script>alert(1)</script>',phone:'9999999999',address:'<svg onload=alert(1)>',category:'Solo Pass',capacity:1,quantity:1,amount:249,status:'approved',paymentState:'verified',checkedIn:false,isDeleted:false,dateStr:'19 October 2026',timeStr:'6–10 PM'};
 test('CSV quotes and neutralizes spreadsheet formula and control prefixes',()=>{
@@ -83,6 +86,8 @@ test('HTML has no inline event handlers, bindings resolve, and CSP permits no in
   for(const match of html.matchAll(/data-ui-args="([^"]*)"/g))assert.doesNotThrow(()=>JSON.parse(match[1].replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&')));
   const csp=require('../vercel.json').headers[0].headers.find(h=>h.key==='Content-Security-Policy').value;
   assert.ok(!csp.split(';').find(v=>v.trim().startsWith('script-src')).includes('unsafe-inline'));
+  assert.ok(csp.split(';').find(v=>v.trim().startsWith('script-src')).includes('https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js'));
+  assert.ok(!csp.includes('https://*.razorpay.com'));
   const structured=html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1];
   const hash=require('node:crypto').createHash('sha256').update(structured).digest('base64');assert.ok(csp.includes('sha256-'+hash));
 });
@@ -153,4 +158,45 @@ test('active checkout locks booking controls and retains the server price after 
   options.modal.ondismiss();assert.equal(browser.doc.getElementById('btn-proceed-pay-text').textContent,'Pay Now · ₹896 ➔');
   assert.equal(browser.doc.getElementById('solo-quantity-increase').disabled,false);
   browser.context.stepSoloQuantity(1);assert.equal(browser.doc.getElementById('reg-summary-amount').textContent,'₹1245');
+});
+test('promotional offer is prominent, concise, Solo-only, with accessible reservation details',()=>{
+  const browser=browserFixture(async()=>response({}));browser.context.openRegistrationModal();
+  assert.ok(html.includes('EARLY BIRD OFFER'));assert.ok(html.includes('<details class="checkout-policy">'));
+  assert.equal(browser.doc.getElementById('reg-early-bird-copy').textContent,'₹199 per person for the first 100 solo attendees.');
+  assert.equal(browser.doc.getElementById('reg-pricing-detail').textContent,'Final price confirmed at checkout.');
+  assert.ok(browser.doc.getElementById('reg-reservation-policy').textContent.includes('20 minutes'));
+  assert.ok(browser.doc.getElementById('reg-reservation-policy').textContent.includes('do not guarantee admission'));
+  assert.equal(browser.doc.getElementById('reg-price-caption').textContent,'Regular-price estimate');
+  browser.context.selectWizardCategory('couple');assert.equal(browser.doc.getElementById('reg-early-bird-offer').style.display,'none');
+  browser.context.selectWizardCategory('solo');assert.equal(browser.doc.getElementById('reg-early-bird-offer').style.display,'block');
+});
+test('exhausted promotional inventory displays the server regular quote without promising a discount',async()=>{
+  let options;const booking={passId:attendee.passId,recoveryToken:'a'.repeat(43),order_id:'order_regularfixture',amount:249000,currency:'INR',key_id:'fixture-key',
+    pricing:{promotionalQuantity:0,regularQuantity:10,promotionalUnitPaise:19900,regularUnitPaise:24900}};
+  const browser=browserFixture(async url=>response(url==='/api/create-order'?booking:{pass:{...attendee,status:'pending'}}));
+  browser.context.Razorpay=function(value){options=value;this.on=()=>{};this.open=()=>{};};browser.context.setSoloQuantity(10);
+  browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';browser.context.handleStep1Submit();
+  for(let i=0;i<20&&!options;i++)await new Promise(setImmediate);
+  assert.equal(options.amount,249000);assert.equal(browser.doc.getElementById('reg-summary-amount').textContent,'₹2490');
+  assert.equal(browser.doc.getElementById('reg-pricing-detail').textContent,'10 regular × ₹249 = ₹2490');
+  assert.equal(browser.doc.getElementById('reg-price-caption').textContent,'Confirmed checkout total');
+});
+test('SDK errors create no order; backend errors retain their own identity and unlock checkout',async()=>{
+  for(const sdkFailure of [true,false]){
+    let orderCalls=0;const browser=browserFixture(async()=>{orderCalls++;return {ok:false,status:503,json:async()=>({success:false,error:'Service is not configured',code:'CONFIGURATION_REQUIRED'})};});
+    if(sdkFailure)browser.context.JmuCheckoutSDK.load=async()=>{const error=new Error('Secure checkout could not load. No order was created.');error.code='CHECKOUT_SDK_UNAVAILABLE';throw error;};
+    else browser.context.Razorpay=function(){};
+    browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';browser.context.handleStep1Submit();
+    for(let i=0;i<20&&browser.doc.getElementById('reg-payment-feedback').hidden!==false;i++)await new Promise(setImmediate);
+    assert.equal(orderCalls,sdkFailure?0:1);assert.equal(browser.doc.getElementById('btn-proceed-pay').disabled,false);
+    assert.equal(browser.doc.getElementById('reg-payment-feedback').textContent,sdkFailure?'Secure checkout could not load. No order was created.':'Service is not configured');
+    browser.context.openRegistrationModal();assert.equal(browser.doc.getElementById('reg-payment-feedback').hidden,true);
+  }
+});
+test('unexpected HTML API responses are not mistaken for SDK failures or displayed as raw HTML',async()=>{
+  const browser=browserFixture(async()=>({ok:false,status:502,json:async()=>{throw new Error('<private provider details>');}}));
+  browser.context.Razorpay=function(){};browser.doc.getElementById('reg-name').value='Fixture attendee';browser.doc.getElementById('reg-phone').value='9999999999';browser.context.handleStep1Submit();
+  for(let i=0;i<20&&browser.doc.getElementById('reg-payment-feedback').hidden!==false;i++)await new Promise(setImmediate);
+  assert.match(browser.doc.getElementById('reg-payment-feedback').textContent,/booking server returned an unexpected response/);
+  assert.ok(!browser.doc.getElementById('reg-payment-feedback').textContent.includes('private provider'));
 });

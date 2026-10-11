@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname,'..');
 const output = path.resolve(root,'public');
-const staticFiles = ['index.html','404.html','app.js','security-ui.js','campaign-config.js','styles-v2.css','styles.css',
+const staticFiles = ['index.html','404.html','app.js','security-ui.js','campaign-config.js','checkout-loader.js','styles-v2.css','styles.css',
   'qrcode.bundle.js','html2canvas.bundle.js','site.webmanifest','robots.txt','sitemap.xml'];
 function build() {
   if (path.dirname(output) !== root || path.basename(output) !== 'public') throw new Error('Invalid output target');
